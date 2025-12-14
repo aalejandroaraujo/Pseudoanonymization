@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(dir:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m spacy download:*)",
+      "Bash(python:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}
