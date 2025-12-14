@@ -139,7 +139,7 @@ class DocumentAnonymizer:
                 operators[et] = OperatorConfig("mask", {"masking_char": "*", "chars_to_mask": 100, "from_end": False})
         elif operator == "redact":
             for et in all_entity_types:
-                operators[et] = OperatorConfig("redact")
+                operators[et] = OperatorConfig("replace", {"new_value": "[REDACTED]"})
         elif operator == "hash":
             for et in all_entity_types:
                 operators[et] = OperatorConfig("hash", {"hash_type": "sha256"})

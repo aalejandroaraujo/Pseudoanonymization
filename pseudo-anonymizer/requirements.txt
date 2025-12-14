@@ -27,6 +27,13 @@ pytesseract>=0.3.10
 # Note: After installing, download the spaCy model:
 # python -m spacy download en_core_web_sm
 
+# Web GUI framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+jinja2>=3.1.2
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+
 # Note: For image anonymization, also install Tesseract OCR:
 # Windows: https://github.com/UB-Mannheim/tesseract/wiki
 # macOS: brew install tesseract

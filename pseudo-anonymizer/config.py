@@ -141,7 +141,7 @@ OPERATOR_CONFIGS: Dict[str, Dict] = {
         'reversible': False,
     },
     'redact': {
-        'description': 'Remove the entity completely',
+        'description': 'Replace with [REDACTED] marker',
         'example': 'John Smith -> [REDACTED]',
         'reversible': False,
     },

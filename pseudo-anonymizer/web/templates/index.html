@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Pseudo-Anonymizer{% endblock %}
+
+{% block content %}
+<div x-data="{ showHelp: false }">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p class="mt-2 text-gray-600">Anonymize sensitive documents before sharing with AI assistants</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="card p-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Files Processed</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ stats.total_processed }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-accent-100 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Entities Anonymized</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ stats.total_entities }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-6">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Privacy Protected</p>
+                    <p class="text-2xl font-bold text-green-600">100%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- New Anonymization Card -->
+        <div class="card p-8">
+            <div class="text-center">
+                <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Anonymize a Document</h3>
+                <p class="text-gray-600 mb-6">Upload a PDF, DOCX, or TXT file to remove PII and custom terms</p>
+                <a href="/upload" class="btn-primary inline-flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    Upload File
+                </a>
+            </div>
+        </div>
+
+        <!-- How It Works Card -->
+        <div class="card p-8">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">How It Works</h3>
+            <div class="space-y-4">
+                <div class="flex items-start">
+                    <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-primary-600 font-bold text-sm">1</span>
+                    </div>
+                    <div class="ml-4">
+                        <p class="font-medium text-gray-900">Upload your document</p>
+                        <p class="text-sm text-gray-500">PDF, DOCX, or TXT files supported</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-primary-600 font-bold text-sm">2</span>
+                    </div>
+                    <div class="ml-4">
+                        <p class="font-medium text-gray-900">Configure settings</p>
+                        <p class="text-sm text-gray-500">Add custom terms to protect (project names, etc.)</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-primary-600 font-bold text-sm">3</span>
+                    </div>
+                    <div class="ml-4">
+                        <p class="font-medium text-gray-900">Download anonymized file</p>
+                        <p class="text-sm text-gray-500">Share safely with AI assistants like ChatGPT or Claude</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sessions -->
+    {% if recent_sessions %}
+    <div class="card">
+        <div class="p-6 border-b border-gray-100">
+            <h3 class="text-lg font-bold text-gray-900">Recent Sessions</h3>
+        </div>
+        <div class="divide-y divide-gray-100">
+            {% for session in recent_sessions %}
+            <div class="p-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="font-medium text-gray-900">{{ session.file_name or 'Untitled' }}</p>
+                            <p class="text-sm text-gray-500">{{ session.created_at[:10] if session.created_at else 'Unknown' }}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        {% if session.status == 'completed' %}
+                        <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">Completed</span>
+                        <a href="/results/{{ session.id }}" class="text-primary-600 hover:text-primary-700 text-sm font-medium">View Results</a>
+                        {% elif session.status == 'processing' %}
+                        <span class="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">Processing</span>
+                        {% else %}
+                        <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full">{{ session.status }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

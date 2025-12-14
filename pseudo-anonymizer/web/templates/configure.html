@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}Configure - Pseudo-Anonymizer{% endblock %}
+
+{% block content %}
+<div x-data="configureHandler()" x-init="init()">
+    <!-- Progress Steps -->
+    <div class="mb-8">
+        <div class="flex items-center justify-center">
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <span class="ml-2 text-gray-500">Upload</span>
+            </div>
+            <div class="w-16 h-1 bg-primary-500 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 gradient-bg rounded-full flex items-center justify-center text-white font-bold">2</div>
+                <span class="ml-2 font-medium text-gray-900">Configure</span>
+            </div>
+            <div class="w-16 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">3</div>
+                <span class="ml-2 text-gray-500">Process</span>
+            </div>
+            <div class="w-16 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">4</div>
+                <span class="ml-2 text-gray-500">Results</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Info Banner -->
+    <div class="mb-6 bg-primary-50 border border-primary-200 rounded-xl p-4">
+        <div class="flex items-center">
+            <div class="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+            </div>
+            <div class="ml-4">
+                <p class="font-medium text-primary-900">{{ session.file_name }}</p>
+                <p class="text-sm text-primary-700">Ready to configure anonymization settings</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Deny List Section -->
+        <div class="lg:col-span-2">
+            <div class="card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Custom Deny List</h3>
+                        <p class="text-sm text-gray-500">Add terms you want to anonymize (project names, company names, etc.)</p>
+                    </div>
+                    <div class="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Add Term Input -->
+                <div class="flex gap-2 mb-4">
+                    <input
+                        type="text"
+                        x-model="newTerm"
+                        @keyup.enter="addTerm()"
+                        placeholder="Enter a term to protect (e.g., project name)"
+                        class="input-field flex-1"
+                    >
+                    <button @click="addTerm()" class="btn-primary">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Terms Tags -->
+                <div class="min-h-[100px] p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <template x-if="denyList.length === 0">
+                        <p class="text-gray-400 text-center py-4">No custom terms added yet. Add terms above to protect specific words.</p>
+                    </template>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="(term, index) in denyList" :key="index">
+                            <span class="tag">
+                                <span x-text="term"></span>
+                                <button @click="removeTerm(index)" class="tag-remove">&times;</button>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+
+                <p class="mt-2 text-xs text-gray-500">
+                    These terms will be replaced with &lt;CUSTOM_1&gt;, &lt;CUSTOM_2&gt;, etc.
+                </p>
+            </div>
+
+            <!-- Entity Types Section -->
+            <div class="card p-6 mt-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Entity Types to Detect</h3>
+                        <p class="text-sm text-gray-500">Select which types of PII to anonymize</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="selectAllEntities()" class="text-sm text-primary-600 hover:text-primary-700 font-medium">Select All</button>
+                        <span class="text-gray-300">|</span>
+                        <button @click="clearAllEntities()" class="text-sm text-gray-600 hover:text-gray-700 font-medium">Clear</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {% for entity in all_entities %}
+                    <label class="flex items-start p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors">
+                        <input
+                            type="checkbox"
+                            value="{{ entity }}"
+                            x-model="selectedEntities"
+                            class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        >
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900">{{ entity }}</span>
+                            <p class="text-xs text-gray-500">{{ entity_descriptions.get(entity, '') }}</p>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="lg:col-span-1">
+            <!-- Operator Selection -->
+            <div class="card p-6">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Anonymization Method</h3>
+
+                <div class="space-y-3">
+                    {% for op_name, op_config in operators.items() %}
+                    <label
+                        class="flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all"
+                        :class="selectedOperator === '{{ op_name }}' ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'"
+                    >
+                        <input
+                            type="radio"
+                            name="operator"
+                            value="{{ op_name }}"
+                            x-model="selectedOperator"
+                            class="mt-1 w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                        >
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-medium text-gray-900 capitalize">{{ op_name }}</span>
+                                {% if op_config.get('reversible') %}
+                                <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Reversible</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-sm text-gray-500 mt-1">{{ op_config.get('description', '') }}</p>
+                            <p class="text-xs text-gray-400 mt-1 font-mono">{{ op_config.get('example', '') }}</p>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Quick Tips -->
+            <div class="card p-6 mt-6 bg-yellow-50 border-yellow-200">
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div class="ml-3">
+                        <h4 class="font-medium text-yellow-800">Quick Tips</h4>
+                        <ul class="mt-2 text-sm text-yellow-700 space-y-1">
+                            <li>Use <strong>Replace</strong> if you need to restore original names later</li>
+                            <li>Add project codenames to the deny list</li>
+                            <li>PERSON detects names of people automatically</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="mt-8 flex justify-between">
+        <a href="/upload" class="btn-secondary flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"></path>
+            </svg>
+            Back to Upload
+        </a>
+        <button
+            @click="saveAndContinue()"
+            :disabled="isSaving"
+            class="btn-primary flex items-center disabled:opacity-50"
+        >
+            <span x-show="!isSaving">Start Anonymization</span>
+            <span x-show="isSaving">Saving...</span>
+            <svg x-show="!isSaving" class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+function configureHandler() {
+    return {
+        sessionId: '{{ session.id }}',
+        newTerm: '',
+        denyList: {{ session.deny_list | tojson }},
+        selectedEntities: {{ session.entities | tojson }},
+        selectedOperator: '{{ session.operator }}',
+        isSaving: false,
+
+        init() {
+            // Default entities if none selected
+            if (this.selectedEntities.length === 0) {
+                this.selectedEntities = {{ default_entities | tojson }};
+            }
+        },
+
+        addTerm() {
+            const term = this.newTerm.trim();
+            if (term && !this.denyList.includes(term)) {
+                this.denyList.push(term);
+                this.newTerm = '';
+            }
+        },
+
+        removeTerm(index) {
+            this.denyList.splice(index, 1);
+        },
+
+        selectAllEntities() {
+            this.selectedEntities = {{ all_entities | tojson }};
+        },
+
+        clearAllEntities() {
+            this.selectedEntities = [];
+        },
+
+        async saveAndContinue() {
+            this.isSaving = true;
+
+            const formData = new FormData();
+            formData.append('deny_list', this.denyList.join(','));
+            formData.append('entities', this.selectedEntities.join(','));
+            formData.append('operator', this.selectedOperator);
+
+            try {
+                const response = await fetch(`/api/configure/${this.sessionId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save configuration');
+                }
+
+                const data = await response.json();
+                window.location.href = `/process/${this.sessionId}`;
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                this.isSaving = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

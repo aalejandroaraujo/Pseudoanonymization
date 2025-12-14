@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Document - Pseudo-Anonymizer{% endblock %}
+
+{% block content %}
+<div x-data="uploadHandler()" x-init="init()">
+    <!-- Progress Steps -->
+    <div class="mb-8">
+        <div class="flex items-center justify-center">
+            <div class="flex items-center">
+                <div class="w-10 h-10 gradient-bg rounded-full flex items-center justify-center text-white font-bold">1</div>
+                <span class="ml-2 font-medium text-gray-900">Upload</span>
+            </div>
+            <div class="w-16 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">2</div>
+                <span class="ml-2 text-gray-500">Configure</span>
+            </div>
+            <div class="w-16 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">3</div>
+                <span class="ml-2 text-gray-500">Process</span>
+            </div>
+            <div class="w-16 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">4</div>
+                <span class="ml-2 text-gray-500">Results</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="max-w-2xl mx-auto">
+        <div class="card p-8">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Upload Your Document</h2>
+                <p class="mt-2 text-gray-600">Select a file to anonymize before sharing with AI assistants</p>
+            </div>
+
+            <!-- Dropzone -->
+            <div
+                class="dropzone cursor-pointer"
+                :class="{ 'dragover': isDragging, 'border-green-500 bg-green-50': uploadedFile }"
+                @dragover.prevent="isDragging = true"
+                @dragleave.prevent="isDragging = false"
+                @drop.prevent="handleDrop($event)"
+                @click="$refs.fileInput.click()"
+            >
+                <input
+                    type="file"
+                    x-ref="fileInput"
+                    class="hidden"
+                    accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.bmp,.tiff,.gif"
+                    @change="handleFileSelect($event)"
+                >
+
+                <template x-if="!uploadedFile">
+                    <div>
+                        <div class="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                        </div>
+                        <p class="text-lg font-medium text-gray-900 mb-1">
+                            Drag and drop your file here
+                        </p>
+                        <p class="text-gray-500 mb-4">or click to browse</p>
+                        <div class="flex justify-center gap-2 flex-wrap">
+                            <span class="tag">PDF</span>
+                            <span class="tag">DOCX</span>
+                            <span class="tag">TXT</span>
+                            <span class="tag">PNG</span>
+                            <span class="tag">JPG</span>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="uploadedFile">
+                    <div>
+                        <div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <p class="text-lg font-medium text-gray-900 mb-1" x-text="uploadedFile.name"></p>
+                        <p class="text-gray-500" x-text="formatFileSize(uploadedFile.size)"></p>
+                        <button
+                            @click.stop="clearFile()"
+                            class="mt-4 text-sm text-red-600 hover:text-red-700 font-medium"
+                        >
+                            Remove and upload different file
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Upload Progress -->
+            <div x-show="isUploading" x-cloak class="mt-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Uploading...</span>
+                    <span class="text-sm text-gray-500" x-text="uploadProgress + '%'"></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-primary-600 h-2 rounded-full progress-bar" :style="'width: ' + uploadProgress + '%'"></div>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div x-show="errorMessage" x-cloak class="mt-6 p-4 bg-red-50 rounded-lg border border-red-200">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="text-red-700" x-text="errorMessage"></span>
+                </div>
+            </div>
+
+            <!-- Continue Button -->
+            <div class="mt-8 flex justify-end">
+                <button
+                    @click="continueToConfig()"
+                    :disabled="!uploadedFile || isUploading"
+                    class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                    Continue to Configure
+                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Supported Formats Info -->
+        <div class="mt-6 text-center text-sm text-gray-500">
+            <p>Supported formats: PDF, DOCX, TXT for documents | PNG, JPG, BMP, TIFF, GIF for images</p>
+            <p class="mt-1">Maximum file size: 50MB</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function uploadHandler() {
+    return {
+        sessionId: '{{ session_id }}',
+        isDragging: false,
+        uploadedFile: null,
+        isUploading: false,
+        uploadProgress: 0,
+        errorMessage: '',
+
+        init() {
+            // Initialize any necessary setup
+        },
+
+        handleDrop(event) {
+            this.isDragging = false;
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                this.processFile(files[0]);
+            }
+        },
+
+        handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                this.processFile(files[0]);
+            }
+        },
+
+        processFile(file) {
+            this.errorMessage = '';
+
+            // Validate file type
+            const validTypes = ['.pdf', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.gif'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!validTypes.includes(ext)) {
+                this.errorMessage = `Invalid file type: ${ext}. Please upload a PDF, DOCX, TXT, or image file.`;
+                return;
+            }
+
+            // Validate file size (50MB max)
+            if (file.size > 50 * 1024 * 1024) {
+                this.errorMessage = 'File is too large. Maximum size is 50MB.';
+                return;
+            }
+
+            this.uploadedFile = file;
+            this.uploadFile(file);
+        },
+
+        async uploadFile(file) {
+            this.isUploading = true;
+            this.uploadProgress = 0;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('session_id', this.sessionId);
+
+            try {
+                // Simulate progress for better UX
+                const progressInterval = setInterval(() => {
+                    if (this.uploadProgress < 90) {
+                        this.uploadProgress += 10;
+                    }
+                }, 100);
+
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(progressInterval);
+                this.uploadProgress = 100;
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+
+                const data = await response.json();
+                this.sessionId = data.session_id;
+
+            } catch (error) {
+                this.errorMessage = error.message;
+                this.uploadedFile = null;
+            } finally {
+                this.isUploading = false;
+            }
+        },
+
+        clearFile() {
+            this.uploadedFile = null;
+            this.uploadProgress = 0;
+            this.errorMessage = '';
+            this.$refs.fileInput.value = '';
+        },
+
+        continueToConfig() {
+            if (this.uploadedFile && !this.isUploading) {
+                window.location.href = `/configure/${this.sessionId}`;
+            }
+        },
+
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    };
+}
+</script>
+{% endblock %}

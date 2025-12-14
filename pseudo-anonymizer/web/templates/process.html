@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Processing - Pseudo-Anonymizer{% endblock %}
+
+{% block content %}
+<div x-data="processHandler()" x-init="init()">
+    <!-- Progress Steps -->
+    <div class="mb-8">
+        <div class="flex items-center justify-center">
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <span class="ml-2 text-gray-500">Upload</span>
+            </div>
+            <div class="w-16 h-1 bg-green-500 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <span class="ml-2 text-gray-500">Configure</span>
+            </div>
+            <div class="w-16 h-1 mx-4" :class="progress >= 100 ? 'bg-green-500' : 'bg-primary-500'"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                     :class="progress >= 100 ? 'bg-green-500' : 'gradient-bg'">
+                    <template x-if="progress >= 100">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </template>
+                    <template x-if="progress < 100">
+                        <span>3</span>
+                    </template>
+                </div>
+                <span class="ml-2" :class="progress >= 100 ? 'text-gray-500' : 'font-medium text-gray-900'">Process</span>
+            </div>
+            <div class="w-16 h-1 bg-gray-200 mx-4"></div>
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 font-bold">4</div>
+                <span class="ml-2 text-gray-500">Results</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Card -->
+    <div class="max-w-2xl mx-auto">
+        <div class="card p-8">
+            <!-- Processing Animation -->
+            <div class="text-center mb-8">
+                <template x-if="!isComplete && !hasError">
+                    <div>
+                        <div class="w-20 h-20 mx-auto mb-4 relative">
+                            <div class="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                            <div class="absolute inset-0 rounded-full border-4 border-primary-500 border-t-transparent animate-spin"></div>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">Anonymizing Document</h2>
+                        <p class="text-gray-600" x-text="statusMessage">Initializing...</p>
+                    </div>
+                </template>
+
+                <template x-if="isComplete">
+                    <div>
+                        <div class="w-20 h-20 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                            <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">Anonymization Complete!</h2>
+                        <p class="text-gray-600">Your document has been processed successfully.</p>
+                    </div>
+                </template>
+
+                <template x-if="hasError">
+                    <div>
+                        <div class="w-20 h-20 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+                            <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">Processing Failed</h2>
+                        <p class="text-red-600" x-text="errorMessage">An error occurred.</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Progress</span>
+                    <span class="text-sm text-gray-500" x-text="progress + '%'"></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                        class="h-3 rounded-full progress-bar transition-all duration-300"
+                        :class="hasError ? 'bg-red-500' : (isComplete ? 'bg-green-500' : 'bg-primary-600')"
+                        :style="'width: ' + progress + '%'"
+                    ></div>
+                </div>
+            </div>
+
+            <!-- Entity Summary -->
+            <div x-show="Object.keys(entitySummary).length > 0" class="mb-6" x-cloak>
+                <h3 class="text-sm font-medium text-gray-700 mb-3">Entities Detected</h3>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="(count, type) in entitySummary" :key="type">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800">
+                            <span x-text="type"></span>
+                            <span class="ml-2 bg-primary-200 px-2 py-0.5 rounded-full text-xs" x-text="count"></span>
+                        </span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Processing Log -->
+            <div class="bg-gray-900 rounded-xl p-4 mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-medium text-gray-300">Processing Log</h3>
+                    <span class="text-xs text-gray-500" x-text="logs.length + ' entries'"></span>
+                </div>
+                <div id="log-container" class="space-y-1 max-h-64 overflow-y-auto font-mono text-xs">
+                    <template x-for="(log, index) in logs" :key="index">
+                        <div class="flex items-start py-0.5">
+                            <span class="text-gray-500 mr-2 select-none" x-text="'[' + (index + 1) + ']'"></span>
+                            <span
+                                class="break-all"
+                                :class="{
+                                    'text-green-400': log.includes('MATCH') || log.includes('complete') || log.includes('Replaced'),
+                                    'text-yellow-400': log.includes('Warning') || log.includes('OCR detected'),
+                                    'text-red-400': log.includes('ERROR') || log.includes('failed'),
+                                    'text-blue-400': log.includes('Processing') || log.includes('Opening'),
+                                    'text-gray-300': !log.includes('MATCH') && !log.includes('complete') && !log.includes('Warning') && !log.includes('ERROR') && !log.includes('Processing') && !log.includes('Opening') && !log.includes('Replaced')
+                                }"
+                                x-text="log"
+                            ></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="flex justify-between">
+                <a href="/configure/{{ session.id }}" class="btn-secondary" x-show="!isComplete && !hasError">
+                    Cancel
+                </a>
+                <button
+                    x-show="isComplete"
+                    @click="goToResults()"
+                    class="btn-primary flex items-center ml-auto"
+                >
+                    View Results
+                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                    </svg>
+                </button>
+                <a
+                    x-show="hasError"
+                    href="/configure/{{ session.id }}"
+                    class="btn-primary ml-auto"
+                >
+                    Try Again
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function processHandler() {
+    return {
+        sessionId: '{{ session.id }}',
+        progress: 0,
+        statusMessage: 'Starting anonymization...',
+        isComplete: false,
+        hasError: false,
+        errorMessage: '',
+        entitySummary: {},
+        logs: [],
+        redirectUrl: '',
+
+        async init() {
+            // Start processing
+            await this.startProcessing();
+
+            // Listen for progress updates
+            this.listenForProgress();
+        },
+
+        async startProcessing() {
+            try {
+                const response = await fetch(`/api/process/${this.sessionId}`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    this.hasError = true;
+                    this.errorMessage = error.detail || 'Failed to start processing';
+                }
+            } catch (error) {
+                this.hasError = true;
+                this.errorMessage = error.message;
+            }
+        },
+
+        listenForProgress() {
+            const eventSource = new EventSource(`/api/progress/${this.sessionId}`);
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.error) {
+                    this.hasError = true;
+                    this.errorMessage = data.error;
+                    eventSource.close();
+                    return;
+                }
+
+                this.progress = data.progress || this.progress;
+                this.statusMessage = data.message || this.statusMessage;
+                this.logs.push(data.message);
+
+                if (data.entity_summary) {
+                    this.entitySummary = data.entity_summary;
+                }
+
+                // Auto-scroll log container
+                this.$nextTick(() => {
+                    const container = document.getElementById('log-container');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                });
+
+                if (data.status === 'completed') {
+                    this.isComplete = true;
+                    this.redirectUrl = data.redirect_url;
+                    eventSource.close();
+                }
+            };
+
+            eventSource.onerror = () => {
+                if (!this.isComplete) {
+                    this.hasError = true;
+                    this.errorMessage = 'Connection lost. Please refresh the page.';
+                }
+                eventSource.close();
+            };
+        },
+
+        goToResults() {
+            window.location.href = this.redirectUrl || `/results/${this.sessionId}`;
+        }
+    };
+}
+</script>
+{% endblock %}

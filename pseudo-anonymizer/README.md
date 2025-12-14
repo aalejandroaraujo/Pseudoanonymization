@@ -1,389 +1,168 @@
 # Pseudo-Anonymizer
 
-A Python CLI tool for anonymizing sensitive documents and images before sharing them with LLMs (like ChatGPT, Claude, etc.). Detect and replace personally identifiable information (PII) including names, emails, phone numbers, and more. Blur sensitive text in images using OCR detection.
+Anonymize sensitive documents before sharing them with LLMs. Detects PII (names, emails, phones, etc.) and replaces them with consistent pseudonyms. Also blurs text in images embedded in PDFs.
 
-## Features
+## What it does
 
-- **Multi-format support**: Process PDF, DOCX, and TXT files
-- **Image anonymization**: Blur text in images (PNG, JPG, BMP, TIFF, GIF) using OCR
-- **PII Detection**: Uses Microsoft Presidio for accurate entity recognition
-- **Custom Deny Lists**: Anonymize project names, company names, or any NDA-protected terms
-- **Multiple anonymization methods**: mask, redact, replace, or hash sensitive data
-- **Reversible anonymization**: Save mappings to restore original content later
-- **Consistent pseudonyms**: Same name always maps to the same placeholder
-- **Simple CLI**: Easy to use from the command line or VS Code terminal
+1. Takes a document (PDF, DOCX, TXT) or image
+2. Detects personally identifiable information using Microsoft Presidio
+3. Replaces sensitive data with placeholders like `<PERSON_1>`, `<EMAIL_ADDRESS_1>`
+4. Saves a mapping file so you can restore the original later
+5. **PDF-to-PDF anonymization** with image text blurring using OCR
+6. **Fuzzy matching** for OCR text detection (handles OCR misreadings)
 
-## Installation
+The idea: you want to use ChatGPT/Claude to help with a confidential document, but you can't share the real names. Anonymize first, get LLM help, then de-anonymize the response.
 
-### 1. Clone or download the project
+## Vibe code alert
+
+99% of this repo was vibe coded with Claude. The code works but don't expect production-grade engineering. PRs welcome if you want to clean things up.
+
+## Setup
 
 ```bash
+# clone and enter
 cd pseudo-anonymizer
-```
 
-### 2. Create a virtual environment (recommended)
-
-```bash
+# create venv (recommended)
 python -m venv venv
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # macOS/Linux
 
-# Windows
-venv\Scripts\activate
-
-# macOS/Linux
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
+# install deps
 pip install -r requirements.txt
-```
 
-### 4. Download the spaCy language model
-
-```bash
+# download spacy model
 python -m spacy download en_core_web_sm
 ```
 
-### 5. (Optional) Install Tesseract OCR for image anonymization
-
-For the `blur-image` command, you need Tesseract OCR installed:
-
-- **Windows**: Download from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
-- **macOS**: `brew install tesseract`
-- **Linux**: `sudo apt install tesseract-ocr`
-
-### 6. (Optional) Set up environment variables
-
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-```
-
-## Quick Start
-
-### Basic usage - anonymize a document
-
-```bash
-python main.py anonymize -i document.pdf
-```
-
-### Anonymize with mapping for later reversal
-
-```bash
-python main.py anonymize -i report.docx --save-mapping mapping.json
-```
-
-### Restore anonymized document
-
-```bash
-python main.py de-anonymize -i report_anon.txt -m mapping.json
-```
-
-### Blur text in an image
-
-```bash
-python main.py blur-image -i screenshot.png --blur-all
-```
+For image blurring, you also need [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) installed.
 
 ## Usage
 
-### Anonymize Command
+### CLI
 
 ```bash
-python main.py anonymize [OPTIONS]
-```
+# basic anonymization
+python main.py anonymize -i document.pdf
 
-**Options:**
+# save mapping for later reversal
+python main.py anonymize -i report.docx --save-mapping mapping.json
 
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--input` | `-i` | Input file path (PDF, DOCX, TXT) | Required |
-| `--output` | `-o` | Output file path | `{input}_anon.txt` |
-| `--operator` | | Anonymization method | `replace` |
-| `--entities` | | Comma-separated entity types | `PERSON,EMAIL_ADDRESS,PHONE_NUMBER` |
-| `--save-mapping` | | Save mapping to JSON file | None |
-| `--deny-list` | `-d` | Custom terms to anonymize (comma-separated or file path) | None |
-| `--api-key` | | API key for future LLM features | None |
+# restore original names in LLM response
+python main.py de-anonymize -i chatgpt_response.txt -m mapping.json
 
-**Examples:**
-
-```bash
-# Basic anonymization
-python main.py anonymize -i patient_report.pdf
-
-# Mask names with asterisks
-python main.py anonymize -i report.docx --operator mask
-
-# Replace with pseudonyms and save mapping
-python main.py anonymize -i data.txt --operator replace --save-mapping mapping.json
-
-# Custom output path
-python main.py anonymize -i document.pdf -o anonymized_document.txt
-
-# Only anonymize emails and phone numbers
-python main.py anonymize -i contacts.txt --entities EMAIL_ADDRESS,PHONE_NUMBER
-
-# Detect all common PII types
-python main.py anonymize -i file.pdf --entities PERSON,EMAIL_ADDRESS,PHONE_NUMBER,CREDIT_CARD,IP_ADDRESS,URL
-
-# Anonymize custom terms (e.g., project names under NDA)
-python main.py anonymize -i confidential.pdf --deny-list "ProjectX,SecretCorp" --save-mapping mapping.json
-
-# Use a deny list file
-python main.py anonymize -i document.pdf --deny-list deny_terms.txt
-```
-
-### De-anonymize Command
-
-Restore an anonymized document using a saved mapping file:
-
-```bash
-python main.py de-anonymize -i document_anon.txt -m mapping.json
-```
-
-**Options:**
-
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--input` | `-i` | Anonymized file to restore | Required |
-| `--mapping` | `-m` | Path to mapping JSON | Required |
-| `--output` | `-o` | Output file path | `{input}_restored.txt` |
-
-### Blur-Image Command
-
-Anonymize images by blurring detected text using OCR:
-
-```bash
-python main.py blur-image [OPTIONS]
-```
-
-**Options:**
-
-| Option | Short | Description | Default |
-|--------|-------|-------------|---------|
-| `--input` | `-i` | Input image path (PNG, JPG, BMP, TIFF, GIF) | Required |
-| `--output` | `-o` | Output image path | `{input}_anon.ext` |
-| `--deny-list` | `-d` | Terms to blur (comma-separated or file path) | None |
-| `--blur-all` | `-a` | Blur all detected text | False |
-| `--blur-radius` | `-r` | Gaussian blur intensity | 15 |
-| `--preview` | `-p` | Preview detected text without blurring | False |
-
-**Examples:**
-
-```bash
-# Blur all text in an image
+# blur text in images
 python main.py blur-image -i screenshot.png --blur-all
 
-# Blur only specific terms
-python main.py blur-image -i document.jpg --deny-list "ProjectX,SecretCorp"
-
-# Preview what text will be detected (without blurring)
-python main.py blur-image -i photo.png --preview
-
-# Use stronger blur
-python main.py blur-image -i confidential.png --blur-all --blur-radius 25
-
-# Use a deny list file
-python main.py blur-image -i image.png --deny-list deny_terms.txt
+# anonymize custom terms (project names under NDA, etc.)
+python main.py anonymize -i confidential.pdf --deny-list "ProjectX,SecretCorp"
 ```
 
-### Helper Commands
+### Web GUI
 
-List available entity types:
 ```bash
-python main.py entities
+# start the web server
+cd pseudo-anonymizer
+python -m uvicorn web.app:app --host 0.0.0.0 --port 8000
+
+# open http://localhost:8000
 ```
 
-List available operators:
-```bash
-python main.py operators
-```
+The web interface walks you through: Upload -> Configure (deny list, entities, operator) -> Process -> Download results.
 
-View help:
-```bash
-python main.py --help
-python main.py anonymize --help
-```
+## Operators
 
-## Anonymization Operators
-
-| Operator | Description | Example | Reversible |
-|----------|-------------|---------|------------|
-| `replace` | Replace with pseudonyms | `John Smith` → `<PERSON_1>` | Yes |
-| `mask` | Replace with asterisks | `John Smith` → `**********` | No |
-| `redact` | Remove completely | `John Smith` → `` | No |
-| `hash` | SHA256 hash | `John Smith` → `a1b2c3...` | No |
-
-## Supported Entity Types
-
-| Entity | Description |
-|--------|-------------|
-| `PERSON` | Names of people |
-| `EMAIL_ADDRESS` | Email addresses |
-| `PHONE_NUMBER` | Phone numbers |
-| `CREDIT_CARD` | Credit card numbers |
-| `IP_ADDRESS` | IP addresses |
-| `URL` | URLs and web addresses |
-| `LOCATION` | Physical locations |
-| `DATE_TIME` | Dates and times |
-| `US_SSN` | US Social Security Numbers |
-| `IBAN_CODE` | Bank account numbers |
-| `CUSTOM` | Custom deny list terms (see below) |
-
-Run `python main.py entities` for the complete list.
+| Operator | What it does | Example | Reversible |
+|----------|--------------|---------|------------|
+| `replace` | Consistent pseudonyms | `John Smith` -> `<PERSON_1>` | Yes |
+| `mask` | Asterisks | `John Smith` -> `**********` | No |
+| `redact` | [REDACTED] marker | `John Smith` -> `[REDACTED]` | No |
+| `hash` | SHA256 | `John Smith` -> `a1b2c3...` | No |
 
 ## Custom Deny Lists
 
-Beyond standard PII detection, you can specify custom terms to anonymize. This is useful for:
-
-- **Project names** under NDA
-- **Company names** that should remain confidential
-- **Product codenames** or internal terminology
-- **Any sensitive terms** specific to your documents
-
-### Inline Deny List
-
-Provide terms directly as a comma-separated string:
+Beyond standard PII, you can specify terms to anonymize - useful for project codenames, company names, anything under NDA:
 
 ```bash
-python main.py anonymize -i document.pdf --deny-list "ProjectX,SecretCorp,InternalCodename"
+# inline
+python main.py anonymize -i doc.pdf --deny-list "ProjectX,SecretCorp"
+
+# from file (one term per line)
+python main.py anonymize -i doc.pdf --deny-list deny_terms.txt
 ```
 
-### Deny List File
-
-Create a text file with one term per line:
-
-```
-# deny_terms.txt
-ProjectX
-SecretCorp
-InternalCodename
-```
-
-Then reference it:
-
-```bash
-python main.py anonymize -i document.pdf --deny-list deny_terms.txt
-```
-
-### How It Works
-
-Custom terms are matched case-insensitively with word boundaries. For example, if you add "ProjectX" to the deny list:
-
-- "ProjectX" -> `<CUSTOM_1>`
-- "PROJECTX" -> `<CUSTOM_1>`
-- "projectx" -> `<CUSTOM_1>`
-- "MyProjectX" -> Not matched (word boundary)
-
-Custom terms appear as `<CUSTOM_N>` in the anonymized output and are included in the mapping file for reversal.
-
-## Project Structure
+## Directory Structure
 
 ```
 pseudo-anonymizer/
-├── main.py              # CLI entry point (Click)
-├── config.py            # Configuration settings
-├── anonymizer.py        # PII detection/anonymization (Presidio)
-├── image_anonymizer.py  # Image text blur (OCR + Pillow)
-├── file_handler.py      # Document extraction (PDF/DOCX/TXT)
-├── mapping_manager.py   # De-anonymization mapping storage
-├── .env.example         # Environment variable template
-├── requirements.txt     # Python dependencies
-└── README.md            # This file
-```
-
-## Mapping File Format
-
-The mapping JSON file stores the relationship between original and anonymized values:
-
-```json
-{
-  "mapping": {
-    "John Smith": "<PERSON_1>",
-    "john.smith@email.com": "<EMAIL_ADDRESS_1>"
-  },
-  "reverse_mapping": {
-    "<PERSON_1>": "John Smith",
-    "<EMAIL_ADDRESS_1>": "john.smith@email.com"
-  },
-  "metadata": {
-    "created_at": "2024-01-15T10:30:00",
-    "entry_count": 2,
-    "version": "1.0"
-  }
-}
+├── main.py              # CLI entry point
+├── anonymizer.py        # PII detection (Presidio)
+├── file_handler.py      # PDF/DOCX/TXT extraction
+├── image_anonymizer.py  # OCR + blur
+├── pdf_anonymizer.py    # PDF-to-PDF output (PyMuPDF)
+├── mapping_manager.py   # Save/load mappings
+├── config.py            # Settings
+├── web/
+│   ├── app.py           # FastAPI backend
+│   ├── templates/       # Jinja2 HTML
+│   └── static/          # CSS/JS
+└── requirements.txt
 ```
 
 ## Workflow Example
 
-### 1. Prepare a document for ChatGPT
-
 ```bash
-# Anonymize the document
-python main.py anonymize -i confidential_report.pdf --save-mapping report_mapping.json -o safe_report.txt
+# 1. Anonymize
+python main.py anonymize -i confidential.pdf --save-mapping mapping.json -o safe.txt
 
-# Output: safe_report.txt (anonymized) + report_mapping.json (for reversal)
+# 2. Paste safe.txt into ChatGPT, get response
+
+# 3. Save ChatGPT response to file, then restore names
+python main.py de-anonymize -i response.txt -m mapping.json -o final.txt
 ```
 
-### 2. Use with ChatGPT
+## PDF Image Processing
 
-Copy the contents of `safe_report.txt` and paste into ChatGPT. All sensitive information has been replaced with placeholders like `<PERSON_1>`, `<EMAIL_ADDRESS_1>`, etc.
+When processing PDFs with embedded images (like screenshots), the tool uses:
 
-### 3. Get response from ChatGPT
+1. **3x image scaling** - Upscales images for better OCR accuracy on small text
+2. **Image preprocessing** - Enhances contrast and sharpness before OCR
+3. **Fuzzy matching** - Uses Levenshtein distance to match OCR text even with typos
+   - OCR might read "Mindguord" instead of "Mindguard"
+   - Fuzzy matching with 80% similarity threshold catches these variants
+4. **Low confidence threshold** - Accepts OCR results down to 15% confidence
 
-Copy ChatGPT's response to a file (e.g., `chatgpt_response.txt`).
+### OCR Settings
 
-### 4. Restore original names
+The following settings are used for image text detection:
+- `MIN_CONFIDENCE = 15` - Minimum OCR confidence (0-100)
+- `scale_factor = 3` - Image upscaling multiplier
+- `contrast = 1.5` - Contrast enhancement
+- `sharpness = 2.0` - Sharpness enhancement
+- `similarity_threshold = 0.8` - Fuzzy match threshold (80%)
 
-```bash
-python main.py de-anonymize -i chatgpt_response.txt -m report_mapping.json -o final_response.txt
-```
+## Processing Log
 
-The `final_response.txt` will have all pseudonyms replaced with the original values.
-
-## Tips
-
-- **Always save the mapping** if you need to de-anonymize later
-- **Use `replace` operator** for reversible anonymization
-- **Test on a sample first** before processing large documents
-- **Keep mapping files secure** - they contain the original PII values
+The web GUI provides a downloadable processing log that includes:
+- OCR detection results with confidence scores
+- Fuzzy match details (similarity percentages)
+- Coordinates of blurred regions
+- Potential matches that were considered
 
 ## Troubleshooting
 
-### "No module named 'spacy'" or model not found
+**spacy model not found**: `python -m spacy download en_core_web_sm`
 
-```bash
-pip install spacy
-python -m spacy download en_core_web_sm
-```
+**PDF returns empty text**: Probably a scanned PDF (image-based). Use OCR tools instead.
 
-### PDF extraction returns empty text
+**Tesseract not found**: Install from [here](https://github.com/UB-Mannheim/tesseract/wiki) and add to PATH.
 
-The PDF might be image-based (scanned). pdfplumber only extracts text from text-based PDFs. Consider using OCR tools for scanned documents.
-
-### "Permission denied" error
-
-Ensure you have write permissions to the output directory.
-
-### Image anonymization: "Tesseract not found"
-
-Install Tesseract OCR for your platform:
-
-- **Windows**: Download from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and add to PATH
-- **macOS**: `brew install tesseract`
-- **Linux**: `sudo apt install tesseract-ocr`
-
-### Image anonymization: No text detected
-
-- Ensure the image has readable text (not too small or blurry)
-- Try using `--preview` to see what OCR detects
-- For low-quality images, consider pre-processing (resize, increase contrast)
+**OCR not detecting text in images**: Try these:
+1. Ensure Tesseract is installed and in PATH
+2. Check the processing log for detected words
+3. Some stylized/artistic fonts may not be recognized by OCR
+4. Very small text may not be detected even with scaling
 
 ## License
 
-MIT License
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
+MIT
