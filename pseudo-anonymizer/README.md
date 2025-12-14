@@ -1,7 +1,7 @@
 # Pseudo-Anonymizer
 
 <p align="center">
-  <img src="docs/mockup_1_dashboard.webp" alt="Pseudo-Anonymizer Dashboard" width="700">
+  <img src="docs/mockup_1_dashboard.png" alt="Pseudo-Anonymizer Dashboard" width="700">
 </p>
 
 **Anonymize sensitive documents before sharing them with AI assistants like ChatGPT or Claude.**
@@ -212,7 +212,7 @@ python -m uvicorn web.app:app --host 127.0.0.1 --port 8000
 Upload a document by clicking the upload area or dragging and dropping a file.
 
 <p align="center">
-  <img src="docs/mockup_1_dashboard.webp" alt="Step 1: Dashboard" width="700">
+  <img src="docs/mockup_1_dashboard.png" alt="Step 1: Dashboard" width="700">
 </p>
 
 **Supported formats:** PDF, DOCX, TXT, PNG, JPG
@@ -222,7 +222,7 @@ Upload a document by clicking the upload area or dragging and dropping a file.
 ### Step 2: Configure Settings
 
 <p align="center">
-  <img src="docs/mockup_3_configure.webp" alt="Step 2: Configure" width="700">
+  <img src="docs/mockup_3_configure.png" alt="Step 2: Configure" width="700">
 </p>
 
 **Configure your anonymization:**
@@ -242,7 +242,7 @@ Upload a document by clicking the upload area or dragging and dropping a file.
 ### Step 3: Processing
 
 <p align="center">
-  <img src="docs/mockup_4_process.webp" alt="Step 3: Processing" width="700">
+  <img src="docs/mockup_4_process.png" alt="Step 3: Processing" width="700">
 </p>
 
 Watch real-time progress as the tool:
@@ -256,7 +256,7 @@ Watch real-time progress as the tool:
 ### Step 4: Download Results
 
 <p align="center">
-  <img src="docs/mockup_5_results.webp" alt="Step 4: Results" width="700">
+  <img src="docs/mockup_5_results.png" alt="Step 4: Results" width="700">
 </p>
 
 **Download your files:**
