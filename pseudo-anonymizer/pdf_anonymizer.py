@@ -311,7 +311,8 @@ def anonymize_pdf_with_mapping(
     input_path: str,
     output_path: str,
     mapping: Dict[str, str],
-    operator: str = "replace"
+    operator: str = "replace",
+    manual_blur_regions: Optional[List[Dict]] = None
 ) -> Tuple[str, int, List[str]]:
     """
     Anonymize a PDF using an anonymization mapping.
@@ -321,11 +322,18 @@ def anonymize_pdf_with_mapping(
         output_path: Path to save the anonymized PDF.
         mapping: Dictionary mapping original values to anonymized values.
         operator: Anonymization operator used (affects redact style).
+        manual_blur_regions: Optional list of manually specified regions to blur.
+            Each region dict has: page (1-indexed), image_index, x, y, width, height
+            (coordinates are in original image pixels).
 
     Returns:
         Tuple of (output_path, number of replacements made, list of log messages).
     """
     logs = []
+
+    # Initialize manual blur regions
+    if manual_blur_regions is None:
+        manual_blur_regions = []
 
     # Determine redact style based on operator
     redact_style = "blackout" if operator == "mask" else "replace"
@@ -335,11 +343,14 @@ def anonymize_pdf_with_mapping(
     logs.append(f"Opening PDF: {Path(input_path).name}")
     logs.append(f"Terms to find: {list(mapping.keys())}")
     logs.append(f"Redact style: {redact_style}")
+    if manual_blur_regions:
+        logs.append(f"Manual blur regions: {len(manual_blur_regions)} region(s) to apply")
 
     try:
         doc = fitz.open(input_path)
         total_replacements = 0
         total_image_blurs = 0
+        total_manual_blurs = 0
 
         logs.append(f"PDF has {doc.page_count} page(s)")
 
@@ -390,6 +401,41 @@ def anonymize_pdf_with_mapping(
                         if pil_image.mode in ('RGBA', 'P'):
                             pil_image = pil_image.convert('RGB')
 
+                        # Apply manual blur regions first (page is 1-indexed in regions)
+                        manual_regions_for_image = [
+                            r for r in manual_blur_regions
+                            if r.get('page') == page_num + 1 and r.get('image_index') == img_index
+                        ]
+                        manual_blurs_applied = 0
+                        if manual_regions_for_image:
+                            logs.append(f"    Applying {len(manual_regions_for_image)} manual blur region(s)...")
+                            for region in manual_regions_for_image:
+                                try:
+                                    x = int(region['x'])
+                                    y = int(region['y'])
+                                    w = int(region['width'])
+                                    h = int(region['height'])
+
+                                    # Ensure coordinates are within image bounds
+                                    x1 = max(0, x)
+                                    y1 = max(0, y)
+                                    x2 = min(pil_image.width, x + w)
+                                    y2 = min(pil_image.height, y + h)
+
+                                    if x2 > x1 and y2 > y1:
+                                        region_img = pil_image.crop((x1, y1, x2, y2))
+                                        blurred = region_img.filter(ImageFilter.GaussianBlur(radius=15))
+                                        pil_image.paste(blurred, (x1, y1))
+                                        manual_blurs_applied += 1
+                                        logs.append(f"      Manual blur applied at ({x1}, {y1}, {x2-x1}x{y2-y1})")
+                                except Exception as region_error:
+                                    logs.append(f"      Warning: Could not apply manual region: {region_error}")
+
+                            total_manual_blurs += manual_blurs_applied
+
+                            # If we applied manual blurs but no OCR blurs, we still need to save the image
+                            # The OCR section will handle saving if there are OCR blurs too
+
                         # Run OCR - ensure tesseract path is set for Windows
                         import os as os_module
                         if os_module.name == 'nt':
@@ -403,7 +449,7 @@ def anonymize_pdf_with_mapping(
                         )
 
                         # Apply image preprocessing to improve OCR on stylized text
-                        from PIL import ImageEnhance
+                        from PIL import ImageEnhance, ImageOps
 
                         # Increase contrast
                         contrast_enhancer = ImageEnhance.Contrast(scaled_image)
@@ -415,11 +461,80 @@ def anonymize_pdf_with_mapping(
 
                         logs.append(f"    Scaled image from {pil_image.size} to {scaled_image.size} (3x) with contrast/sharpness enhancement")
 
+                        # Multi-pass OCR: try different preprocessing to catch all text
+                        all_ocr_results = []
+                        import numpy as np
+
+                        # Pass 1: Standard enhanced image
                         ocr_data = pytesseract.image_to_data(scaled_image, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('standard', ocr_data))
+
+                        # Pass 2: Inverted image (white text on dark becomes dark on white)
+                        inverted_image = ImageOps.invert(scaled_image.convert('RGB'))
+                        ocr_data_inv = pytesseract.image_to_data(inverted_image, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('inverted', ocr_data_inv))
+
+                        # Pass 3: High contrast grayscale
+                        gray_image = scaled_image.convert('L')
+                        contrast_enhancer2 = ImageEnhance.Contrast(gray_image)
+                        high_contrast = contrast_enhancer2.enhance(2.5)
+                        ocr_data_gray = pytesseract.image_to_data(high_contrast, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('grayscale', ocr_data_gray))
+
+                        # Pass 4: Simple binary threshold (black/white) - using PIL
+                        # Calculate threshold using mean pixel value (simple Otsu approximation)
+                        gray_np = np.array(gray_image)
+                        threshold = int(np.mean(gray_np))
+                        binary_image = gray_image.point(lambda x: 255 if x > threshold else 0, '1').convert('L')
+                        ocr_data_binary = pytesseract.image_to_data(binary_image, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('binary', ocr_data_binary))
+
+                        # Pass 5: Inverted binary
+                        binary_inv_image = ImageOps.invert(binary_image)
+                        ocr_data_binary_inv = pytesseract.image_to_data(binary_inv_image, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('binary_inv', ocr_data_binary_inv))
+
+                        # Pass 6: High threshold binary (catches lighter text)
+                        high_threshold = min(255, int(threshold * 1.3))
+                        binary_high = gray_image.point(lambda x: 255 if x > high_threshold else 0, '1').convert('L')
+                        ocr_data_binary_high = pytesseract.image_to_data(binary_high, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('binary_high', ocr_data_binary_high))
+
+                        # Pass 7: Low threshold binary (catches darker text)
+                        low_threshold = max(0, int(threshold * 0.7))
+                        binary_low = gray_image.point(lambda x: 255 if x > low_threshold else 0, '1').convert('L')
+                        ocr_data_binary_low = pytesseract.image_to_data(binary_low, output_type=pytesseract.Output.DICT)
+                        all_ocr_results.append(('binary_low', ocr_data_binary_low))
+
+                        # Merge all OCR results, tracking unique detections by position
+                        merged_ocr = {'text': [], 'conf': [], 'left': [], 'top': [], 'width': [], 'height': []}
+                        seen_positions = set()
+
+                        for pass_name, ocr_result in all_ocr_results:
+                            n = len(ocr_result['text'])
+                            for i in range(n):
+                                text = ocr_result['text'][i].strip()
+                                if not text:
+                                    continue
+                                # Create position key (rounded to avoid near-duplicates)
+                                pos_key = (ocr_result['left'][i] // 20, ocr_result['top'][i] // 20, text.lower())
+                                if pos_key not in seen_positions:
+                                    seen_positions.add(pos_key)
+                                    merged_ocr['text'].append(text)
+                                    merged_ocr['conf'].append(ocr_result['conf'][i])
+                                    merged_ocr['left'].append(ocr_result['left'][i])
+                                    merged_ocr['top'].append(ocr_result['top'][i])
+                                    merged_ocr['width'].append(ocr_result['width'][i])
+                                    merged_ocr['height'].append(ocr_result['height'][i])
+
+                        ocr_data = merged_ocr
+                        num_passes = len(all_ocr_results)
+                        logs.append(f"    Multi-pass OCR: {num_passes} passes (standard, inverted, grayscale, binary, binary_inv, binary_high, binary_low)")
+
                         n_boxes = len(ocr_data['text'])
                         deny_list_lower = [term.lower() for term in mapping.keys()]
 
-                        logs.append(f"    OCR detected {n_boxes} text boxes")
+                        logs.append(f"    OCR detected {n_boxes} unique text boxes (merged from {num_passes} passes)")
 
                         # Lower confidence threshold to 15% to catch more stylized text
                         MIN_CONFIDENCE = 15
@@ -486,12 +601,19 @@ def anonymize_pdf_with_mapping(
 
                         total_image_blurs += regions_blurred
 
-                        if regions_blurred > 0:
+                        # Save image if either OCR or manual blurs were applied
+                        total_blurs_for_image = regions_blurred + manual_blurs_applied
+                        if total_blurs_for_image > 0:
                             img_buffer = io.BytesIO()
                             pil_image.save(img_buffer, format='PNG')
                             img_buffer.seek(0)
                             page.replace_image(xref, stream=img_buffer.getvalue())
-                            logs.append(f"    Replaced image with {regions_blurred} blurred region(s)")
+                            blur_details = []
+                            if regions_blurred > 0:
+                                blur_details.append(f"{regions_blurred} OCR")
+                            if manual_blurs_applied > 0:
+                                blur_details.append(f"{manual_blurs_applied} manual")
+                            logs.append(f"    Replaced image with {total_blurs_for_image} blurred region(s) ({', '.join(blur_details)})")
                         else:
                             logs.append(f"    No matching text found in image")
 
@@ -505,10 +627,11 @@ def anonymize_pdf_with_mapping(
 
         logs.append(f"PDF anonymization complete:")
         logs.append(f"  - Text replacements: {total_replacements}")
-        logs.append(f"  - Image regions blurred: {total_image_blurs}")
+        logs.append(f"  - Image regions blurred (OCR): {total_image_blurs}")
+        logs.append(f"  - Image regions blurred (manual): {total_manual_blurs}")
         logs.append(f"  - Output saved to: {Path(output_path).name}")
 
-        return output_path, total_replacements + total_image_blurs, logs
+        return output_path, total_replacements + total_image_blurs + total_manual_blurs, logs
 
     except Exception as e:
         logs.append(f"ERROR: {e}")

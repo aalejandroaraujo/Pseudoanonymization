@@ -121,12 +121,23 @@
         </div>
     </div>
 
-    <!-- Recent Sessions -->
-    {% if recent_sessions %}
+    <!-- Recent Sessions & Start Fresh -->
     <div class="card">
-        <div class="p-6 border-b border-gray-100">
+        <div class="p-6 border-b border-gray-100 flex items-center justify-between">
             <h3 class="text-lg font-bold text-gray-900">Recent Sessions</h3>
+            <button
+                @click="startFresh()"
+                :disabled="clearing"
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                title="Clear all session data and uploaded files"
+            >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span x-text="clearing ? 'Clearing...' : 'Start Fresh'"></span>
+            </button>
         </div>
+        {% if recent_sessions %}
         <div class="divide-y divide-gray-100">
             {% for session in recent_sessions %}
             <div class="p-4 hover:bg-gray-50 transition-colors">
@@ -156,8 +167,15 @@
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <svg class="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <p class="text-gray-500">No recent sessions. Upload a document to get started!</p>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <script>
@@ -165,9 +183,33 @@ function dashboardHandler() {
     return {
         dragOver: false,
         uploading: false,
+        clearing: false,
 
         triggerUpload() {
             this.$refs.fileInput.click();
+        },
+
+        async startFresh() {
+            if (!confirm('This will clear all session data and uploaded files. Continue?')) {
+                return;
+            }
+
+            this.clearing = true;
+            try {
+                const response = await fetch('/api/clear-sessions', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    // Reload the page to reflect the cleared state
+                    window.location.reload();
+                } else {
+                    alert('Failed to clear sessions');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                this.clearing = false;
+            }
         },
 
         handleFileSelect(event) {
@@ -207,16 +249,17 @@ function dashboardHandler() {
                     body: formData
                 });
 
+                const data = await response.json();
+
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Upload failed');
+                    throw new Error(data.detail || data.message || 'Upload failed');
                 }
 
-                const data = await response.json();
                 // Redirect to configure page
                 window.location.href = `/configure/${data.session_id}`;
             } catch (error) {
-                alert('Upload failed: ' + error.message);
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                alert('Upload failed: ' + errorMsg);
                 this.uploading = false;
             }
         }

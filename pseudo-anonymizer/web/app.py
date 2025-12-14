@@ -37,6 +37,8 @@ from file_handler import extract_text_from_file, write_output_file
 from mapping_manager import MappingManager
 from config import Config, parse_deny_list, ENTITY_DESCRIPTIONS, OPERATOR_CONFIGS
 from pdf_anonymizer import anonymize_pdf_with_mapping, PYMUPDF_AVAILABLE
+import base64
+import io
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -94,6 +96,8 @@ def get_session(session_id: str) -> Dict[str, Any]:
             "original_text": None,
             "entity_summary": {},
             "processing_logs": [],  # Store all processing logs
+            "manual_blur_regions": [],  # User-drawn regions to blur in images
+            "pdf_images": [],  # Extracted PDF images info
         }
     return sessions[session_id]
 
@@ -211,9 +215,12 @@ async def results_page(request: Request, session_id: str):
 @app.post("/api/upload")
 async def api_upload(
     file: UploadFile = File(...),
-    session_id: str = Form(...)
+    session_id: str = Form(None)
 ):
     """Handle file upload."""
+    # Generate session_id if not provided (e.g., from dashboard drag & drop)
+    if not session_id:
+        session_id = str(uuid.uuid4())
     session = get_session(session_id)
 
     # Validate file type
@@ -305,6 +312,136 @@ async def api_operators():
         "operators": OPERATOR_CONFIGS,
         "default": config.DEFAULT_OPERATOR,
     }
+
+
+@app.get("/api/pdf-images/{session_id}")
+async def api_pdf_images(session_id: str):
+    """Extract and return images from a PDF file."""
+    session = get_session(session_id)
+
+    if not session.get("file_path"):
+        raise HTTPException(status_code=400, detail="No file uploaded")
+
+    if session.get("file_type", "").lower() != ".pdf":
+        return {"images": [], "message": "Not a PDF file"}
+
+    if not PYMUPDF_AVAILABLE:
+        return {"images": [], "message": "PyMuPDF not available"}
+
+    try:
+        import fitz
+        from PIL import Image
+
+        doc = fitz.open(session["file_path"])
+        images = []
+
+        for page_num in range(doc.page_count):
+            page = doc[page_num]
+            image_list = page.get_images(full=True)
+
+            for img_index, img_info in enumerate(image_list):
+                xref = img_info[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
+
+                    # Convert to PIL to get dimensions
+                    pil_image = Image.open(io.BytesIO(image_bytes))
+                    if pil_image.mode in ('RGBA', 'P'):
+                        pil_image = pil_image.convert('RGB')
+
+                    # Convert to base64 for frontend
+                    buffered = io.BytesIO()
+                    pil_image.save(buffered, format="PNG")
+                    img_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+                    images.append({
+                        "page": page_num + 1,
+                        "index": img_index,
+                        "xref": xref,
+                        "width": pil_image.width,
+                        "height": pil_image.height,
+                        "format": image_ext,
+                        "data": f"data:image/png;base64,{img_base64}"
+                    })
+                except Exception as img_error:
+                    logger.warning(f"Could not extract image {img_index} from page {page_num}: {img_error}")
+
+        doc.close()
+
+        # Store image info in session
+        session["pdf_images"] = [
+            {"page": img["page"], "index": img["index"], "xref": img["xref"],
+             "width": img["width"], "height": img["height"]}
+            for img in images
+        ]
+
+        return {"images": images, "count": len(images)}
+
+    except Exception as e:
+        logger.error(f"Error extracting PDF images: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/blur-regions/{session_id}")
+async def api_get_blur_regions(session_id: str):
+    """Get existing blur regions for a session."""
+    session = get_session(session_id)
+    regions = session.get("manual_blur_regions", [])
+
+    # Convert back to frontend format (imageIndex instead of image_index)
+    frontend_regions = [
+        {
+            "page": r["page"],
+            "imageIndex": r["image_index"],
+            "x": r["x"],
+            "y": r["y"],
+            "width": r["width"],
+            "height": r["height"],
+        }
+        for r in regions
+    ]
+
+    return {
+        "success": True,
+        "regions": frontend_regions,
+        "count": len(frontend_regions)
+    }
+
+
+@app.post("/api/blur-regions/{session_id}")
+async def api_save_blur_regions(session_id: str, request: Request):
+    """Save manually drawn blur regions."""
+    session = get_session(session_id)
+
+    try:
+        data = await request.json()
+        regions = data.get("regions", [])
+
+        # Validate and store regions
+        validated_regions = []
+        for region in regions:
+            if all(k in region for k in ["page", "imageIndex", "x", "y", "width", "height"]):
+                validated_regions.append({
+                    "page": int(region["page"]),
+                    "image_index": int(region["imageIndex"]),
+                    "x": float(region["x"]),
+                    "y": float(region["y"]),
+                    "width": float(region["width"]),
+                    "height": float(region["height"]),
+                })
+
+        session["manual_blur_regions"] = validated_regions
+
+        return {
+            "success": True,
+            "regions_count": len(validated_regions)
+        }
+
+    except Exception as e:
+        logger.error(f"Error saving blur regions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/process/{session_id}")
@@ -418,26 +555,31 @@ async def api_progress(session_id: str):
             file_type = session.get("file_type", "")
             is_pdf = file_type.lower() == ".pdf"
 
+            # Check if we have manual blur regions (for re-processing)
+            manual_regions = session.get("manual_blur_regions", [])
+            has_manual_regions = len(manual_regions) > 0
+
             # Diagnostic logging
-            diag_msg = f"DEBUG: file_type={file_type}, is_pdf={is_pdf}, PYMUPDF={PYMUPDF_AVAILABLE}, mapping_count={len(mapping) if mapping else 0}"
+            diag_msg = f"DEBUG: file_type={file_type}, is_pdf={is_pdf}, PYMUPDF={PYMUPDF_AVAILABLE}, mapping_count={len(mapping) if mapping else 0}, manual_regions={len(manual_regions)}"
             yield f"data: {json.dumps({'progress': 90, 'message': log_message(diag_msg)})}\n\n"
             await asyncio.sleep(0.1)
 
-            if is_pdf and PYMUPDF_AVAILABLE and mapping:
+            if is_pdf and PYMUPDF_AVAILABLE and (mapping or has_manual_regions):
                 # Output as PDF with same format
                 output_file = session_dir / f"{file_stem}_anon.pdf"
                 try:
                     yield f"data: {json.dumps({'progress': 91, 'message': log_message('Entering PDF processing branch...')})}\n\n"
                     await asyncio.sleep(0.1)
 
-                    yield f"data: {json.dumps({'progress': 91, 'message': log_message(f'Calling anonymize_pdf_with_mapping with {len(mapping)} terms...')})}\n\n"
+                    yield f"data: {json.dumps({'progress': 91, 'message': log_message(f'Calling anonymize_pdf_with_mapping with {len(mapping) if mapping else 0} terms and {len(manual_regions)} manual blur region(s)...')})}\n\n"
                     await asyncio.sleep(0.1)
 
                     _, replacement_count, pdf_logs = anonymize_pdf_with_mapping(
                         session["file_path"],
                         str(output_file),
                         mapping,
-                        operator=session.get("operator", "replace")
+                        operator=session.get("operator", "replace"),
+                        manual_blur_regions=manual_regions
                     )
                     session["output_format"] = "pdf"
 
@@ -459,7 +601,7 @@ async def api_progress(session_id: str):
                     session["output_format"] = "txt"
             else:
                 # Output as text
-                yield f"data: {json.dumps({'progress': 91, 'message': log_message(f'Using TEXT output (not PDF branch). is_pdf={is_pdf}, PYMUPDF={PYMUPDF_AVAILABLE}, mapping={bool(mapping)}')})}\n\n"
+                yield f"data: {json.dumps({'progress': 91, 'message': log_message(f'Using TEXT output (not PDF branch). is_pdf={is_pdf}, PYMUPDF={PYMUPDF_AVAILABLE}, mapping={bool(mapping)}, manual_regions={has_manual_regions}')})}\n\n"
                 await asyncio.sleep(0.1)
                 output_file = session_dir / f"{file_stem}_anon.txt"
                 write_output_file(anonymized_text, str(output_file))
@@ -552,6 +694,29 @@ async def api_download(session_id: str, file_type: str):
         filename=filename,
         media_type="application/octet-stream"
     )
+
+
+@app.post("/api/clear-sessions")
+async def api_clear_sessions():
+    """Clear all sessions and uploaded files - allows starting fresh."""
+    global sessions
+
+    # Clean up all session directories
+    for session_id in list(sessions.keys()):
+        session_dir = UPLOADS_DIR / session_id
+        if session_dir.exists():
+            try:
+                shutil.rmtree(session_dir)
+            except Exception as e:
+                logger.warning(f"Could not remove session dir {session_id}: {e}")
+
+    # Clear sessions dict
+    sessions.clear()
+
+    return {
+        "success": True,
+        "message": "All sessions cleared successfully"
+    }
 
 
 @app.post("/api/de-anonymize")

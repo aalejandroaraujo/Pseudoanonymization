@@ -23,6 +23,7 @@ python-dotenv>=1.0.0
 # Image processing (for blur-image command)
 Pillow>=10.0.0
 pytesseract>=0.3.10
+numpy>=1.24.0
 
 # Note: After installing, download the spaCy model:
 # python -m spacy download en_core_web_sm

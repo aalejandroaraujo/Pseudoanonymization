@@ -37,8 +37,23 @@
         </div>
     </div>
 
+    <!-- Re-processing Banner (shown when coming back from results) -->
+    <div x-show="isReprocessing" x-cloak class="mb-6 bg-purple-100 border-2 border-purple-300 rounded-xl p-4">
+        <div class="flex items-center">
+            <div class="w-10 h-10 bg-purple-200 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <div class="ml-4">
+                <p class="font-bold text-purple-900">Re-processing Mode</p>
+                <p class="text-sm text-purple-700">Add more manual blur regions below, then re-process. Your previous settings are preserved.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- File Info Banner -->
-    <div class="mb-6 bg-primary-50 border border-primary-200 rounded-xl p-4">
+    <div class="mb-6 bg-primary-50 border border-primary-200 rounded-xl p-4" x-show="!isReprocessing">
         <div class="flex items-center">
             <div class="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -135,6 +150,107 @@
                     {% endfor %}
                 </div>
             </div>
+
+            <!-- Manual Image Blur Section (only for PDFs) -->
+            <div class="card p-6 mt-6 border-2 border-purple-300 bg-purple-50" x-show="isPdf" x-cloak>
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-purple-900 flex items-center">
+                            <svg class="w-5 h-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            Manual Image Blur Regions
+                        </h3>
+                        <p class="text-sm text-purple-700 mt-1">Manually select areas in embedded images to blur</p>
+                    </div>
+                    <div class="w-10 h-10 bg-purple-200 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Explanation Box -->
+                <div class="mb-4 p-4 bg-white border border-purple-200 rounded-xl">
+                    <h4 class="font-semibold text-purple-800 flex items-center text-sm mb-2">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        What is this?
+                    </h4>
+                    <p class="text-sm text-gray-700 mb-2">
+                        PDFs often contain <strong>embedded images</strong> (screenshots, photos, logos) that may include sensitive text.
+                        OCR (text recognition) automatically blurs text matching your deny list, but <strong>it can miss some text</strong> due to
+                        fonts, colors, or image quality.
+                    </p>
+                    <p class="text-sm text-gray-700 mb-3">
+                        <strong>Use this section to manually mark areas</strong> you want blurred in addition to OCR detection.
+                    </p>
+                    <div class="flex items-start bg-purple-100 rounded-lg p-3">
+                        <span class="text-purple-600 font-bold mr-2 text-sm">Example:</span>
+                        <span class="text-sm text-purple-800">A screenshot shows "Project MindGuard" as a logo. OCR might detect the text "Project" but miss "MindGuard" due to stylized font. Click on the image and draw a rectangle over the "MindGuard" logo to ensure it gets blurred.</span>
+                    </div>
+                </div>
+
+                <!-- Loading state -->
+                <div x-show="loadingImages" class="flex items-center justify-center py-8">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                    <span class="ml-3 text-gray-600">Loading PDF images...</span>
+                </div>
+
+                <!-- No images found -->
+                <div x-show="!loadingImages && pdfImages.length === 0" class="text-center py-8 bg-gray-50 rounded-xl">
+                    <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <p class="text-gray-500">No embedded images found in this PDF</p>
+                </div>
+
+                <!-- Images grid -->
+                <div x-show="!loadingImages && pdfImages.length > 0" class="space-y-4">
+                    <p class="text-sm text-gray-600 mb-2">
+                        <span class="font-medium" x-text="pdfImages.length"></span> image(s) found. Click to mark regions to blur.
+                    </p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <template x-for="(image, idx) in pdfImages" :key="idx">
+                            <div
+                                class="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-200 hover:border-primary-500 transition-colors"
+                                @click="openImageEditor(idx)"
+                            >
+                                <img :src="image.data" class="w-full h-auto" :alt="'Image ' + (idx + 1)">
+                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
+                                    <span class="opacity-0 group-hover:opacity-100 text-white font-medium bg-primary-600 px-3 py-1 rounded-full text-sm">
+                                        Click to mark regions
+                                    </span>
+                                </div>
+                                <!-- Region count badge -->
+                                <div x-show="getRegionsForImage(idx).length > 0"
+                                     class="absolute top-2 right-2 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                    <span x-text="getRegionsForImage(idx).length"></span> region(s)
+                                </div>
+                                <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                                    <span class="text-white text-xs">Page <span x-text="image.page"></span> - <span x-text="image.width"></span>x<span x-text="image.height"></span></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Summary -->
+                    <div x-show="blurRegions.length > 0" class="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span class="text-sm text-purple-800">
+                                <span class="font-medium" x-text="blurRegions.length"></span> manual blur region(s) defined
+                            </span>
+                            <button @click="clearAllRegions()" class="ml-auto text-xs text-purple-600 hover:text-purple-800 underline">Clear all</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
 
         <!-- Sidebar -->
@@ -210,6 +326,81 @@
             </svg>
         </button>
     </div>
+
+    <!-- Image Editor Modal -->
+    <div x-show="editorOpen" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         @keydown.escape.window="closeEditor()">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <!-- Backdrop -->
+            <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" @click="closeEditor()"></div>
+
+            <!-- Modal Content -->
+            <div class="relative bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:max-w-5xl sm:w-full">
+                <!-- Header -->
+                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900">Mark Regions to Blur</h3>
+                            <p class="text-sm text-gray-500">Click and drag to draw rectangles over sensitive areas</p>
+                        </div>
+                        <button @click="closeEditor()" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas Area -->
+                <div class="p-6">
+                    <div class="relative bg-gray-100 rounded-xl overflow-auto max-h-[60vh]" style="min-height: 300px;">
+                        <canvas
+                            x-ref="editorCanvas"
+                            class="cursor-crosshair"
+                            @mousedown="startDrawing($event)"
+                            @mousemove="draw($event)"
+                            @mouseup="stopDrawing($event)"
+                            @mouseleave="stopDrawing($event)"
+                        ></canvas>
+                    </div>
+
+                    <!-- Regions List -->
+                    <div x-show="currentImageRegions.length > 0" class="mt-4">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">Marked Regions:</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="(region, idx) in currentImageRegions" :key="idx">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
+                                    Region <span x-text="idx + 1" class="ml-1"></span>
+                                    <span class="ml-2 text-xs text-purple-600">
+                                        (<span x-text="Math.round(region.width)"></span>x<span x-text="Math.round(region.height)"></span>)
+                                    </span>
+                                    <button @click="removeRegion(idx)" class="ml-2 text-purple-600 hover:text-purple-800">&times;</button>
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <p x-show="currentImageRegions.length === 0" class="mt-4 text-sm text-gray-500 text-center">
+                        No regions marked yet. Click and drag on the image to create blur regions.
+                    </p>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between">
+                    <button @click="clearCurrentImageRegions()" class="btn-secondary text-sm">
+                        Clear All Regions
+                    </button>
+                    <div class="flex gap-3">
+                        <button @click="closeEditor()" class="btn-secondary">Cancel</button>
+                        <button @click="saveAndCloseEditor()" class="btn-primary">
+                            Done (<span x-text="currentImageRegions.length"></span> regions)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -222,11 +413,228 @@ function configureHandler() {
         selectedOperator: '{{ session.operator }}',
         isSaving: false,
 
-        init() {
+        // Re-processing mode
+        isReprocessing: new URLSearchParams(window.location.search).get('reprocess') === 'true',
+
+        // PDF Image blur features
+        isPdf: '{{ session.file_type }}'.toLowerCase() === '.pdf',
+        loadingImages: false,
+        pdfImages: [],
+        blurRegions: [],
+
+        // Editor state
+        editorOpen: false,
+        currentImageIndex: -1,
+        currentImageRegions: [],
+        isDrawing: false,
+        startX: 0,
+        startY: 0,
+        currentRect: null,
+        editorImage: null,
+        scale: 1,
+
+        async init() {
             // Default entities if none selected
             if (this.selectedEntities.length === 0) {
                 this.selectedEntities = {{ default_entities | tojson }};
             }
+
+            // Load PDF images if this is a PDF
+            if (this.isPdf) {
+                await this.loadPdfImages();
+
+                // If re-processing, load existing blur regions
+                if (this.isReprocessing) {
+                    await this.loadExistingBlurRegions();
+                }
+            }
+
+            // If re-processing, scroll to Manual Image Blur section
+            if (this.isReprocessing && this.isPdf) {
+                this.$nextTick(() => {
+                    const blurSection = document.querySelector('[x-show="isPdf"]');
+                    if (blurSection) {
+                        blurSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            }
+        },
+
+        async loadExistingBlurRegions() {
+            try {
+                const response = await fetch(`/api/blur-regions/${this.sessionId}`);
+                const data = await response.json();
+                if (data.success && data.regions) {
+                    this.blurRegions = data.regions;
+                }
+            } catch (error) {
+                console.error('Error loading existing blur regions:', error);
+            }
+        },
+
+        async loadPdfImages() {
+            this.loadingImages = true;
+            try {
+                const response = await fetch(`/api/pdf-images/${this.sessionId}`);
+                const data = await response.json();
+                this.pdfImages = data.images || [];
+            } catch (error) {
+                console.error('Error loading PDF images:', error);
+            } finally {
+                this.loadingImages = false;
+            }
+        },
+
+        getRegionsForImage(imageIndex) {
+            return this.blurRegions.filter(r => r.imageIndex === imageIndex);
+        },
+
+        clearAllRegions() {
+            this.blurRegions = [];
+        },
+
+        openImageEditor(imageIndex) {
+            this.currentImageIndex = imageIndex;
+            this.currentImageRegions = this.blurRegions
+                .filter(r => r.imageIndex === imageIndex)
+                .map(r => ({...r}));
+            this.editorOpen = true;
+
+            // Load image and setup canvas after modal opens
+            this.$nextTick(() => {
+                this.setupCanvas();
+            });
+        },
+
+        setupCanvas() {
+            const canvas = this.$refs.editorCanvas;
+            const ctx = canvas.getContext('2d');
+            const image = this.pdfImages[this.currentImageIndex];
+
+            // Create image element
+            const img = new Image();
+            img.onload = () => {
+                this.editorImage = img;
+
+                // Calculate scale to fit in viewport
+                const maxWidth = Math.min(900, window.innerWidth - 100);
+                const maxHeight = Math.min(500, window.innerHeight - 300);
+                this.scale = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+
+                canvas.width = img.width * this.scale;
+                canvas.height = img.height * this.scale;
+
+                this.redrawCanvas();
+            };
+            img.src = image.data;
+        },
+
+        redrawCanvas() {
+            const canvas = this.$refs.editorCanvas;
+            const ctx = canvas.getContext('2d');
+
+            // Clear and draw image
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(this.editorImage, 0, 0, canvas.width, canvas.height);
+
+            // Draw existing regions
+            ctx.fillStyle = 'rgba(147, 51, 234, 0.3)';  // Purple with transparency
+            ctx.strokeStyle = 'rgba(147, 51, 234, 0.8)';
+            ctx.lineWidth = 2;
+
+            for (const region of this.currentImageRegions) {
+                const x = region.x * this.scale;
+                const y = region.y * this.scale;
+                const w = region.width * this.scale;
+                const h = region.height * this.scale;
+
+                ctx.fillRect(x, y, w, h);
+                ctx.strokeRect(x, y, w, h);
+            }
+
+            // Draw current rectangle if drawing
+            if (this.currentRect) {
+                ctx.fillStyle = 'rgba(147, 51, 234, 0.2)';
+                ctx.strokeStyle = 'rgba(147, 51, 234, 1)';
+                ctx.setLineDash([5, 5]);
+                ctx.fillRect(this.currentRect.x, this.currentRect.y, this.currentRect.width, this.currentRect.height);
+                ctx.strokeRect(this.currentRect.x, this.currentRect.y, this.currentRect.width, this.currentRect.height);
+                ctx.setLineDash([]);
+            }
+        },
+
+        startDrawing(event) {
+            const canvas = this.$refs.editorCanvas;
+            const rect = canvas.getBoundingClientRect();
+            this.isDrawing = true;
+            this.startX = event.clientX - rect.left;
+            this.startY = event.clientY - rect.top;
+            this.currentRect = { x: this.startX, y: this.startY, width: 0, height: 0 };
+        },
+
+        draw(event) {
+            if (!this.isDrawing) return;
+
+            const canvas = this.$refs.editorCanvas;
+            const rect = canvas.getBoundingClientRect();
+            const currentX = event.clientX - rect.left;
+            const currentY = event.clientY - rect.top;
+
+            this.currentRect = {
+                x: Math.min(this.startX, currentX),
+                y: Math.min(this.startY, currentY),
+                width: Math.abs(currentX - this.startX),
+                height: Math.abs(currentY - this.startY)
+            };
+
+            this.redrawCanvas();
+        },
+
+        stopDrawing(event) {
+            if (!this.isDrawing) return;
+            this.isDrawing = false;
+
+            // Only add region if it has meaningful size
+            if (this.currentRect && this.currentRect.width > 10 && this.currentRect.height > 10) {
+                const image = this.pdfImages[this.currentImageIndex];
+                this.currentImageRegions.push({
+                    page: image.page,
+                    imageIndex: this.currentImageIndex,
+                    x: this.currentRect.x / this.scale,
+                    y: this.currentRect.y / this.scale,
+                    width: this.currentRect.width / this.scale,
+                    height: this.currentRect.height / this.scale
+                });
+            }
+
+            this.currentRect = null;
+            this.redrawCanvas();
+        },
+
+        removeRegion(index) {
+            this.currentImageRegions.splice(index, 1);
+            this.redrawCanvas();
+        },
+
+        clearCurrentImageRegions() {
+            this.currentImageRegions = [];
+            this.redrawCanvas();
+        },
+
+        closeEditor() {
+            this.editorOpen = false;
+            this.currentImageIndex = -1;
+            this.currentImageRegions = [];
+            this.currentRect = null;
+            this.editorImage = null;
+        },
+
+        saveAndCloseEditor() {
+            // Remove old regions for this image
+            this.blurRegions = this.blurRegions.filter(r => r.imageIndex !== this.currentImageIndex);
+            // Add updated regions
+            this.blurRegions.push(...this.currentImageRegions);
+            this.closeEditor();
         },
 
         addTerm() {
@@ -252,12 +660,26 @@ function configureHandler() {
         async saveAndContinue() {
             this.isSaving = true;
 
-            const formData = new FormData();
-            formData.append('deny_list', this.denyList.join(','));
-            formData.append('entities', this.selectedEntities.join(','));
-            formData.append('operator', this.selectedOperator);
-
             try {
+                // Save blur regions first if any
+                if (this.blurRegions.length > 0) {
+                    const regionsResponse = await fetch(`/api/blur-regions/${this.sessionId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ regions: this.blurRegions })
+                    });
+
+                    if (!regionsResponse.ok) {
+                        throw new Error('Failed to save blur regions');
+                    }
+                }
+
+                // Save main configuration
+                const formData = new FormData();
+                formData.append('deny_list', this.denyList.join(','));
+                formData.append('entities', this.selectedEntities.join(','));
+                formData.append('operator', this.selectedOperator);
+
                 const response = await fetch(`/api/configure/${this.sessionId}`, {
                     method: 'POST',
                     body: formData

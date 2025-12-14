@@ -28,14 +28,9 @@ class Config:
     # Supported file formats
     SUPPORTED_FORMATS: Set[str] = field(default_factory=lambda: {'.pdf', '.docx', '.txt'})
 
-    # Default entity types to detect
+    # Default entity types to detect (CUSTOM only - user adds deny list terms)
     DEFAULT_ENTITIES: List[str] = field(default_factory=lambda: [
-        "PERSON",
-        "EMAIL_ADDRESS",
-        "PHONE_NUMBER",
-        "CREDIT_CARD",
-        "IP_ADDRESS",
-        "URL",
+        "CUSTOM",
     ])
 
     # All available entity types from Presidio
@@ -70,7 +65,7 @@ class Config:
     })
 
     # Default operator
-    DEFAULT_OPERATOR: str = 'replace'
+    DEFAULT_OPERATOR: str = 'mask'
 
     # Default language for analysis
     DEFAULT_LANGUAGE: str = 'en'
