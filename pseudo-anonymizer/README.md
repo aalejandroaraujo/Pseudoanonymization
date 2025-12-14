@@ -1,10 +1,11 @@
 # Pseudo-Anonymizer
 
-A Python CLI tool for anonymizing sensitive documents before sharing them with LLMs (like ChatGPT, Claude, etc.). Detect and replace personally identifiable information (PII) including names, emails, phone numbers, and more.
+A Python CLI tool for anonymizing sensitive documents and images before sharing them with LLMs (like ChatGPT, Claude, etc.). Detect and replace personally identifiable information (PII) including names, emails, phone numbers, and more. Blur sensitive text in images using OCR detection.
 
 ## Features
 
 - **Multi-format support**: Process PDF, DOCX, and TXT files
+- **Image anonymization**: Blur text in images (PNG, JPG, BMP, TIFF, GIF) using OCR
 - **PII Detection**: Uses Microsoft Presidio for accurate entity recognition
 - **Custom Deny Lists**: Anonymize project names, company names, or any NDA-protected terms
 - **Multiple anonymization methods**: mask, redact, replace, or hash sensitive data
@@ -44,7 +45,15 @@ pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
-### 5. (Optional) Set up environment variables
+### 5. (Optional) Install Tesseract OCR for image anonymization
+
+For the `blur-image` command, you need Tesseract OCR installed:
+
+- **Windows**: Download from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+- **macOS**: `brew install tesseract`
+- **Linux**: `sudo apt install tesseract-ocr`
+
+### 6. (Optional) Set up environment variables
 
 ```bash
 cp .env.example .env
@@ -69,6 +78,12 @@ python main.py anonymize -i report.docx --save-mapping mapping.json
 
 ```bash
 python main.py de-anonymize -i report_anon.txt -m mapping.json
+```
+
+### Blur text in an image
+
+```bash
+python main.py blur-image -i screenshot.png --blur-all
 ```
 
 ## Usage
@@ -134,6 +149,44 @@ python main.py de-anonymize -i document_anon.txt -m mapping.json
 | `--input` | `-i` | Anonymized file to restore | Required |
 | `--mapping` | `-m` | Path to mapping JSON | Required |
 | `--output` | `-o` | Output file path | `{input}_restored.txt` |
+
+### Blur-Image Command
+
+Anonymize images by blurring detected text using OCR:
+
+```bash
+python main.py blur-image [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--input` | `-i` | Input image path (PNG, JPG, BMP, TIFF, GIF) | Required |
+| `--output` | `-o` | Output image path | `{input}_anon.ext` |
+| `--deny-list` | `-d` | Terms to blur (comma-separated or file path) | None |
+| `--blur-all` | `-a` | Blur all detected text | False |
+| `--blur-radius` | `-r` | Gaussian blur intensity | 15 |
+| `--preview` | `-p` | Preview detected text without blurring | False |
+
+**Examples:**
+
+```bash
+# Blur all text in an image
+python main.py blur-image -i screenshot.png --blur-all
+
+# Blur only specific terms
+python main.py blur-image -i document.jpg --deny-list "ProjectX,SecretCorp"
+
+# Preview what text will be detected (without blurring)
+python main.py blur-image -i photo.png --preview
+
+# Use stronger blur
+python main.py blur-image -i confidential.png --blur-all --blur-radius 25
+
+# Use a deny list file
+python main.py blur-image -i image.png --deny-list deny_terms.txt
+```
 
 ### Helper Commands
 
@@ -232,6 +285,7 @@ pseudo-anonymizer/
 ├── main.py              # CLI entry point (Click)
 ├── config.py            # Configuration settings
 ├── anonymizer.py        # PII detection/anonymization (Presidio)
+├── image_anonymizer.py  # Image text blur (OCR + Pillow)
 ├── file_handler.py      # Document extraction (PDF/DOCX/TXT)
 ├── mapping_manager.py   # De-anonymization mapping storage
 ├── .env.example         # Environment variable template
@@ -311,6 +365,20 @@ The PDF might be image-based (scanned). pdfplumber only extracts text from text-
 ### "Permission denied" error
 
 Ensure you have write permissions to the output directory.
+
+### Image anonymization: "Tesseract not found"
+
+Install Tesseract OCR for your platform:
+
+- **Windows**: Download from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and add to PATH
+- **macOS**: `brew install tesseract`
+- **Linux**: `sudo apt install tesseract-ocr`
+
+### Image anonymization: No text detected
+
+- Ensure the image has readable text (not too small or blurry)
+- Try using `--preview` to see what OCR detects
+- For low-quality images, consider pre-processing (resize, increase contrast)
 
 ## License
 

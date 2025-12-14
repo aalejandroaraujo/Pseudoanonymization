@@ -20,5 +20,14 @@ click>=8.1.7
 # Environment variable management
 python-dotenv>=1.0.0
 
+# Image processing (for blur-image command)
+Pillow>=10.0.0
+pytesseract>=0.3.10
+
 # Note: After installing, download the spaCy model:
 # python -m spacy download en_core_web_sm
+
+# Note: For image anonymization, also install Tesseract OCR:
+# Windows: https://github.com/UB-Mannheim/tesseract/wiki
+# macOS: brew install tesseract
+# Linux: sudo apt install tesseract-ocr

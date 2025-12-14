@@ -3,6 +3,7 @@ Pseudo-Anonymizer CLI
 
 A command-line tool for anonymizing sensitive documents before sharing with LLMs.
 Supports PDF, DOCX, and TXT files with configurable PII detection and anonymization.
+Also supports image anonymization with text blur.
 """
 
 import sys
@@ -363,6 +364,160 @@ def operators():
 
     click.echo("Use --operator to specify which method to use:")
     click.echo(click.style("  python main.py anonymize -i file.pdf --operator replace", fg='cyan'))
+
+
+@cli.command('blur-image')
+@click.option(
+    '--input', '-i',
+    'input_file',
+    required=True,
+    type=click.Path(exists=True),
+    help='Input image path (PNG, JPG, BMP, TIFF, GIF)'
+)
+@click.option(
+    '--output', '-o',
+    'output_file',
+    type=click.Path(),
+    help='Output image path (defaults to input_anon.ext)'
+)
+@click.option(
+    '--deny-list', '-d',
+    'deny_list',
+    help='Custom terms to blur: comma-separated (e.g., "ProjectX,SecretCorp") or path to file'
+)
+@click.option(
+    '--blur-all', '-a',
+    is_flag=True,
+    help='Blur all detected text (ignores deny list)'
+)
+@click.option(
+    '--blur-radius', '-r',
+    default=15,
+    type=int,
+    help='Gaussian blur radius (default: 15, higher = more blur)'
+)
+@click.option(
+    '--preview', '-p',
+    is_flag=True,
+    help='Preview detected text without anonymizing'
+)
+@click.pass_context
+def blur_image(
+    ctx,
+    input_file: str,
+    output_file: Optional[str],
+    deny_list: Optional[str],
+    blur_all: bool,
+    blur_radius: int,
+    preview: bool,
+):
+    """
+    Anonymize an image by blurring detected text.
+
+    Uses OCR to detect text regions, then applies Gaussian blur to anonymize.
+    Specify terms with --deny-list or use --blur-all to blur everything.
+
+    Examples:
+
+        python main.py blur-image -i screenshot.png --blur-all
+
+        python main.py blur-image -i document.jpg --deny-list "ProjectX,SecretCorp"
+
+        python main.py blur-image -i photo.png --preview
+    """
+    quiet = ctx.obj.get('quiet', False)
+
+    if not quiet:
+        print_banner()
+
+    try:
+        # Import here to avoid dependency issues if not using image features
+        try:
+            from image_anonymizer import ImageAnonymizer, ImageAnonymizerError
+        except ImportError as e:
+            click.echo(click.style(
+                "[X] Image anonymization requires additional dependencies.\n"
+                "    Install with: pip install Pillow pytesseract\n"
+                "    Also install Tesseract OCR: https://github.com/tesseract-ocr/tesseract",
+                fg='red'
+            ), err=True)
+            sys.exit(1)
+
+        # Parse deny list if provided
+        deny_list_terms = []
+        if deny_list:
+            deny_list_terms = parse_deny_list(deny_list)
+
+        if not quiet:
+            click.echo(click.style(f"[IMAGE] Input: ", fg='white') + click.style(input_file, fg='yellow'))
+            if deny_list_terms:
+                click.echo(click.style(f"[DENY]  Terms to blur: ", fg='white') + click.style(', '.join(deny_list_terms), fg='yellow'))
+            elif blur_all:
+                click.echo(click.style(f"[BLUR]  Mode: ", fg='white') + click.style("Blur ALL detected text", fg='yellow'))
+            click.echo(click.style(f"[GEAR]  Blur radius: ", fg='white') + click.style(str(blur_radius), fg='yellow'))
+            click.echo()
+
+        # Initialize anonymizer
+        click.echo(click.style("Initializing OCR engine...", fg='blue'))
+        anonymizer = ImageAnonymizer(
+            blur_radius=blur_radius,
+            deny_list=deny_list_terms if deny_list_terms else None
+        )
+
+        # Preview mode - just show detected text
+        if preview:
+            click.echo(click.style("Detecting text in image...", fg='blue'))
+            text_regions = anonymizer.get_text_preview(input_file)
+
+            if not text_regions:
+                click.echo(click.style("[OK] No text detected in image", fg='green'))
+                return
+
+            click.echo(click.style(f"\n[CHART] Detected {len(text_regions)} text regions:", fg='cyan', bold=True))
+            for i, region in enumerate(text_regions, 1):
+                match_indicator = " [MATCH]" if region['matches_deny_list'] else ""
+                click.echo(
+                    click.style(f"  {i}. ", fg='white') +
+                    click.style(f"'{region['text']}'", fg='yellow') +
+                    click.style(f" at {region['position']}", fg='white') +
+                    click.style(f" (conf: {region['confidence']:.1f}%)", fg='cyan') +
+                    click.style(match_indicator, fg='red', bold=True)
+                )
+            return
+
+        # Check if we have something to blur
+        if not blur_all and not deny_list_terms:
+            click.echo(click.style(
+                "[WARN] No terms specified to blur. Use --deny-list or --blur-all",
+                fg='yellow'
+            ))
+            return
+
+        # Perform anonymization
+        click.echo(click.style("Detecting and blurring text...", fg='blue'))
+        output_path, summary = anonymizer.anonymize_image(
+            input_file,
+            output_file,
+            blur_all_text=blur_all
+        )
+
+        # Print success summary
+        click.echo()
+        click.echo(click.style("=" * 50, fg='green'))
+        click.echo(click.style(
+            f"[OK] Blurred {summary['regions_blurred']} of {summary['total_text_regions']} text regions",
+            fg='green', bold=True
+        ))
+        click.echo(click.style(f"[IMAGE] Output saved to: {output_path}", fg='green'))
+        click.echo(click.style("=" * 50, fg='green'))
+
+    except Exception as e:
+        if 'ImageAnonymizerError' in str(type(e)):
+            click.echo(click.style(f"[X] Image error: {e}", fg='red'), err=True)
+        else:
+            logger.exception("Unexpected error")
+            click.echo(click.style(f"[X] Unexpected error: {e}", fg='red'), err=True)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
