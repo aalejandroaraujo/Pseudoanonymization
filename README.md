@@ -432,4 +432,4 @@ Issues and pull requests are welcome! Areas that could use improvement:
 
 ---
 
-**Made with Claude Code**
+**Made with Perplexity, Claude Code, Manus AI and ChatGPT**
