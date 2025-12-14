@@ -13,7 +13,7 @@ Detects PII (names, emails, phones, etc.) and custom terms (project names, compa
 You want to use AI assistants to help with a confidential document, but you can't share real names, project codenames, or company information. This tool:
 
 1. **Anonymizes** your document (PDF, DOCX, TXT)
-2. You share the **safe version** with ChatGPT/Claude
+2. You share the **safe version** with Copilot Chat/ChatGPT/Claude
 3. **De-anonymize** the AI's response to restore original names
 
 ---
