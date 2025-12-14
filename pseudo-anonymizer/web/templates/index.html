@@ -3,7 +3,7 @@
 {% block title %}Dashboard - Pseudo-Anonymizer{% endblock %}
 
 {% block content %}
-<div x-data="{ showHelp: false }">
+<div x-data="dashboardHandler()" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="handleDrop($event)">
     <!-- Header -->
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -57,22 +57,32 @@
 
     <!-- Quick Actions -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <!-- New Anonymization Card -->
-        <div class="card p-8">
+        <!-- New Anonymization Card - Now with drag & drop and clickable -->
+        <div
+            class="card p-8 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary-300"
+            :class="{ 'border-2 border-primary-500 bg-primary-50': dragOver }"
+            @click="triggerUpload()"
+            @dragover.prevent.stop="dragOver = true"
+            @dragleave.prevent.stop="dragOver = false"
+            @drop.prevent.stop="handleDrop($event)"
+        >
             <div class="text-center">
-                <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-4 transition-transform duration-200"
+                     :class="{ 'scale-110': dragOver }">
                     <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
                 </div>
                 <h3 class="text-xl font-bold text-gray-900 mb-2">Anonymize a Document</h3>
-                <p class="text-gray-600 mb-6">Upload a PDF, DOCX, or TXT file to remove PII and custom terms</p>
-                <a href="/upload" class="btn-primary inline-flex items-center">
+                <p class="text-gray-600 mb-6" x-text="dragOver ? 'Drop your file here!' : 'Upload a PDF, DOCX, or TXT file to remove PII and custom terms'"></p>
+                <div class="inline-flex items-center text-primary-600 font-medium">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                     </svg>
-                    Upload File
-                </a>
+                    Click or drag & drop to upload
+                </div>
+                <!-- Hidden file input -->
+                <input type="file" x-ref="fileInput" @change="handleFileSelect($event)" class="hidden" accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg">
             </div>
         </div>
 
@@ -149,4 +159,68 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+function dashboardHandler() {
+    return {
+        dragOver: false,
+        uploading: false,
+
+        triggerUpload() {
+            this.$refs.fileInput.click();
+        },
+
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.uploadFile(file);
+            }
+        },
+
+        handleDrop(event) {
+            this.dragOver = false;
+            const file = event.dataTransfer.files[0];
+            if (file) {
+                this.uploadFile(file);
+            }
+        },
+
+        async uploadFile(file) {
+            if (this.uploading) return;
+
+            // Validate file type
+            const validTypes = ['.pdf', '.docx', '.doc', '.txt', '.png', '.jpg', '.jpeg'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!validTypes.includes(ext)) {
+                alert('Invalid file type. Please upload a PDF, DOCX, TXT, or image file.');
+                return;
+            }
+
+            this.uploading = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+
+                const data = await response.json();
+                // Redirect to configure page
+                window.location.href = `/configure/${data.session_id}`;
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+                this.uploading = false;
+            }
+        }
+    };
+}
+</script>
 {% endblock %}
