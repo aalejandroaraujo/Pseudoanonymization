@@ -99,7 +99,7 @@ def cli(ctx, verbose: bool, quiet: bool):
 @click.option(
     '--deny-list', '-d',
     'deny_list',
-    help='Custom terms to anonymize: comma-separated (e.g., "ProjectX,SecretCorp") or path to file'
+    help='Custom terms to anonymize: comma-separated (e.g., "Acme,Internal") or path to file'
 )
 @click.pass_context
 def anonymize(
@@ -383,7 +383,7 @@ def operators():
 @click.option(
     '--deny-list', '-d',
     'deny_list',
-    help='Custom terms to blur: comma-separated (e.g., "ProjectX,SecretCorp") or path to file'
+    help='Custom terms to blur: comma-separated (e.g., "Acme,Internal") or path to file'
 )
 @click.option(
     '--blur-all', '-a',
@@ -421,7 +421,7 @@ def blur_image(
 
         python main.py blur-image -i screenshot.png --blur-all
 
-        python main.py blur-image -i document.jpg --deny-list "ProjectX,SecretCorp"
+        python main.py blur-image -i document.jpg --deny-list "Acme,Internal"
 
         python main.py blur-image -i photo.png --preview
     """

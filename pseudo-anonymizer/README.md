@@ -278,7 +278,7 @@ For automation or command-line workflows:
 python main.py anonymize -i document.pdf
 
 # With custom deny list and saved mapping
-python main.py anonymize -i confidential.pdf --deny-list "ProjectX,SecretCorp" --save-mapping mapping.json
+python main.py anonymize -i confidential.pdf --deny-list "Acme,Internal" --save-mapping mapping.json
 
 # De-anonymize AI response
 python main.py de-anonymize -i chatgpt_response.txt -m mapping.json -o final.txt
@@ -323,7 +323,7 @@ Beyond standard PII, anonymize project codenames, company names, or any NDA-prot
 **In CLI:**
 ```bash
 # Inline list
-python main.py anonymize -i doc.pdf --deny-list "ProjectX,SecretCorp,ClientName"
+python main.py anonymize -i doc.pdf --deny-list "Acme,Internal,ClientName"
 
 # From file (one term per line)
 python main.py anonymize -i doc.pdf --deny-list deny_terms.txt
