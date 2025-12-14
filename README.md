@@ -262,6 +262,11 @@ Watch real-time progress as the tool:
 **Download your files:**
 
 1. **Anonymized Document**: The safe version to share with AI
+
+<p align="center">
+  <img src="pseudo-anonymizer/docs/mockup_6_pdf_download.png" alt="Download pdf file: Image also Blurred" width="700">
+</p>
+
 2. **Mapping File**: JSON file to restore original names later
 3. **Processing Log**: Detailed log of what was detected and replaced
 
