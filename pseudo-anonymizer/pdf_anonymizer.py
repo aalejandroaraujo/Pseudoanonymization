@@ -570,10 +570,21 @@ def anonymize_pdf_with_mapping(
                                 continue
 
                             # Check for fuzzy match against all deny list terms
+                            # Also check individual words from multi-word terms
                             matched_term = None
                             for term in mapping.keys():
+                                # First try matching the full term
                                 if fuzzy_match(text, term, threshold=0.8):
                                     matched_term = term
+                                    break
+                                # Also try matching individual words from multi-word terms
+                                term_words = term.split()
+                                if len(term_words) > 1:
+                                    for word in term_words:
+                                        if len(word) >= 4 and fuzzy_match(text, word, threshold=0.8):
+                                            matched_term = word  # Match the individual word
+                                            break
+                                if matched_term:
                                     break
 
                             if matched_term:

@@ -26,14 +26,19 @@ class DenyListRecognizer(PatternRecognizer):
     """
     Custom recognizer for user-defined deny list terms.
     Matches exact terms (case-insensitive) from a provided list.
+    Handles multi-word terms that may span lines or have special quotes.
     """
 
     def __init__(self, deny_list: List[str], supported_language: str = "en"):
         patterns = []
         for term in deny_list:
             escaped_term = re.escape(term)
-            # Word boundary pattern for case-insensitive matching
-            pattern_str = r"(?i)\b" + escaped_term + r"\b"
+            # Replace escaped spaces with flexible whitespace pattern (handles newlines)
+            escaped_term = escaped_term.replace(r"\ ", r"\s+")
+            # Use lookahead/lookbehind for word boundaries that work with Unicode quotes
+            # (?<![a-zA-Z0-9_]) = not preceded by word char
+            # (?![a-zA-Z0-9_]) = not followed by word char
+            pattern_str = r"(?i)(?<![a-zA-Z0-9_])" + escaped_term + r"(?![a-zA-Z0-9_])"
             patterns.append(
                 Pattern(
                     name=f"deny_list_{term[:20]}",

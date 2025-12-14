@@ -559,13 +559,21 @@ async def api_progress(session_id: str):
             manual_regions = session.get("manual_blur_regions", [])
             has_manual_regions = len(manual_regions) > 0
 
+            # Ensure custom deny list terms are included in the mapping for image OCR
+            deny_list = session.get("deny_list", [])
+            if deny_list:
+                for term in deny_list:
+                    if term not in mapping:
+                        # Add deny list term with a placeholder replacement
+                        mapping[term] = f"<CUSTOM_{len(mapping)+1}>"
+
             # Diagnostic logging
             diag_msg = f"DEBUG: file_type={file_type}, is_pdf={is_pdf}, PYMUPDF={PYMUPDF_AVAILABLE}, mapping_count={len(mapping) if mapping else 0}, manual_regions={len(manual_regions)}"
             yield f"data: {json.dumps({'progress': 90, 'message': log_message(diag_msg)})}\n\n"
             await asyncio.sleep(0.1)
 
-            if is_pdf and PYMUPDF_AVAILABLE and (mapping or has_manual_regions):
-                # Output as PDF with same format
+            if is_pdf and PYMUPDF_AVAILABLE:
+                # Output as PDF - always preserve PDF format for PDF input
                 output_file = session_dir / f"{file_stem}_anon.pdf"
                 try:
                     yield f"data: {json.dumps({'progress': 91, 'message': log_message('Entering PDF processing branch...')})}\n\n"
