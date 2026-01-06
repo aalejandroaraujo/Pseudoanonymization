@@ -28,17 +28,64 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from anonymizer import DocumentAnonymizer
 from file_handler import extract_text_from_file, write_output_file
-from mapping_manager import MappingManager
+from mapping_manager import MappingManager, MappingManagerError
 from config import Config, parse_deny_list, ENTITY_DESCRIPTIONS, OPERATOR_CONFIGS
 from pdf_anonymizer import anonymize_pdf_with_mapping, PYMUPDF_AVAILABLE
 import base64
 import io
+
+
+# ============== Pydantic Models for Text API ==============
+
+class EntityFound(BaseModel):
+    """Represents a detected entity in the text."""
+    type: str = Field(..., description="Entity type (e.g., PERSON, CUSTOM)")
+    original: str = Field(..., description="Original text that was detected")
+    replacement: str = Field(..., description="Replacement placeholder")
+
+
+class AnonymizeTextRequest(BaseModel):
+    """Request model for text anonymization."""
+    text: str = Field(..., description="Text to anonymize")
+    operator: str = Field(default="replace", description="Anonymization operator: replace, mask, redact, hash")
+    deny_list: Optional[List[str]] = Field(default=None, description="Custom terms to anonymize")
+    language: str = Field(default="en", description="Language code for analysis")
+
+
+class AnonymizeTextResponse(BaseModel):
+    """Response model for text anonymization."""
+    anonymized: str = Field(..., description="Anonymized text")
+    mapping_id: str = Field(..., description="UUID for the mapping file")
+    entities_found: List[EntityFound] = Field(default_factory=list, description="List of detected entities")
+
+
+class DeanonymizeTextRequest(BaseModel):
+    """Request model for text de-anonymization."""
+    text: str = Field(..., description="Anonymized text to restore")
+    mapping_id: str = Field(..., description="UUID of the mapping file to use")
+
+
+class DeanonymizeTextResponse(BaseModel):
+    """Response model for text de-anonymization."""
+    original: str = Field(..., description="De-anonymized text")
+
+
+class HealthResponse(BaseModel):
+    """Response model for health check."""
+    status: str = Field(default="healthy", description="Service status")
+    version: str = Field(default="1.0.0", description="API version")
+
+
+class ErrorResponse(BaseModel):
+    """Response model for errors."""
+    detail: str = Field(..., description="Error message")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -61,9 +108,11 @@ BASE_DIR = Path(__file__).parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 UPLOADS_DIR = BASE_DIR.parent / "uploads"
+MAPPINGS_DIR = Path(os.environ.get("MAPPINGS_DIR", BASE_DIR.parent / "mappings"))
 
 # Ensure directories exist
 UPLOADS_DIR.mkdir(exist_ok=True)
+MAPPINGS_DIR.mkdir(exist_ok=True)
 
 # Setup templates and static files
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -758,6 +807,185 @@ async def api_de_anonymize(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid mapping file format")
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Text API v1 Routes (for programmatic integration) ==============
+
+@app.get("/api/v1/health", response_model=HealthResponse)
+async def api_v1_health():
+    """Health check endpoint for service monitoring."""
+    return HealthResponse(status="healthy", version="1.0.0")
+
+
+@app.post("/api/v1/anonymize-text", response_model=AnonymizeTextResponse)
+async def api_v1_anonymize_text(request: AnonymizeTextRequest):
+    """
+    Anonymize text and return the result with a mapping ID.
+
+    The mapping is saved to a file for later de-anonymization.
+    Default operator is "replace" which creates reversible pseudonyms.
+    """
+    try:
+        # Validate operator
+        valid_operators = {"replace", "mask", "redact", "hash"}
+        if request.operator not in valid_operators:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid operator: {request.operator}. Valid options: {', '.join(valid_operators)}"
+            )
+
+        # Build entities list - include CUSTOM if deny_list provided
+        entities = list(config.DEFAULT_ENTITIES)
+        if request.deny_list and "CUSTOM" not in entities:
+            entities.append("CUSTOM")
+
+        # Initialize anonymizer
+        anonymizer = DocumentAnonymizer(
+            deny_list=request.deny_list,
+            entities=entities,
+            language=request.language
+        )
+
+        # Perform anonymization
+        anonymized_text, mapping = anonymizer.anonymize_text(
+            request.text,
+            operator=request.operator
+        )
+
+        # Generate mapping ID and save mapping
+        mapping_id = str(uuid.uuid4())
+        mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
+
+        mapping_manager = MappingManager()
+        mapping_manager.add_mappings(mapping)
+        mapping_manager.save(str(mapping_file))
+
+        # Build entities_found list from the mapping
+        entities_found = []
+        for original, replacement in mapping.items():
+            # Extract entity type from replacement (e.g., <PERSON_1> -> PERSON)
+            entity_type = "UNKNOWN"
+            if replacement.startswith("<") and replacement.endswith(">"):
+                inner = replacement[1:-1]
+                if "_" in inner:
+                    entity_type = inner.rsplit("_", 1)[0]
+                else:
+                    entity_type = inner
+            entities_found.append(EntityFound(
+                type=entity_type,
+                original=original,
+                replacement=replacement
+            ))
+
+        return AnonymizeTextResponse(
+            anonymized=anonymized_text,
+            mapping_id=mapping_id,
+            entities_found=entities_found
+        )
+
+    except Exception as e:
+        logger.error(f"Anonymization error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/deanonymize-text", response_model=DeanonymizeTextResponse)
+async def api_v1_deanonymize_text(request: DeanonymizeTextRequest):
+    """
+    De-anonymize text using a previously saved mapping.
+
+    Requires the mapping_id from the original anonymize-text response.
+    """
+    try:
+        # Validate mapping_id format (should be UUID)
+        try:
+            uuid.UUID(request.mapping_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid mapping_id format")
+
+        # Load mapping file
+        mapping_file = MAPPINGS_DIR / f"{request.mapping_id}.json"
+
+        if not mapping_file.exists():
+            raise HTTPException(status_code=404, detail=f"Mapping not found: {request.mapping_id}")
+
+        try:
+            mapping_manager = MappingManager(str(mapping_file))
+        except MappingManagerError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid mapping file: {e}")
+
+        # De-anonymize text
+        original_text = mapping_manager.de_anonymize_text(request.text)
+
+        return DeanonymizeTextResponse(original=original_text)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"De-anonymization error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/mappings/{mapping_id}")
+async def api_v1_get_mapping(mapping_id: str):
+    """
+    Retrieve a mapping by its ID for inspection.
+
+    Returns the full mapping JSON including metadata.
+    """
+    try:
+        # Validate mapping_id format
+        try:
+            uuid.UUID(mapping_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid mapping_id format")
+
+        mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
+
+        if not mapping_file.exists():
+            raise HTTPException(status_code=404, detail=f"Mapping not found: {mapping_id}")
+
+        with open(mapping_file, 'r', encoding='utf-8') as f:
+            mapping_data = json.load(f)
+
+        return mapping_data
+
+    except HTTPException:
+        raise
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Corrupted mapping file")
+    except Exception as e:
+        logger.error(f"Error retrieving mapping: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/mappings/{mapping_id}")
+async def api_v1_delete_mapping(mapping_id: str):
+    """
+    Delete a mapping file.
+
+    Use this for cleanup after de-anonymization is no longer needed.
+    """
+    try:
+        # Validate mapping_id format
+        try:
+            uuid.UUID(mapping_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid mapping_id format")
+
+        mapping_file = MAPPINGS_DIR / f"{mapping_id}.json"
+
+        if not mapping_file.exists():
+            raise HTTPException(status_code=404, detail=f"Mapping not found: {mapping_id}")
+
+        mapping_file.unlink()
+
+        return {"success": True, "message": f"Mapping {mapping_id} deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting mapping: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
