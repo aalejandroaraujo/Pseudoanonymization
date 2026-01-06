@@ -835,10 +835,8 @@ async def api_v1_anonymize_text(request: AnonymizeTextRequest):
                 detail=f"Invalid operator: {request.operator}. Valid options: {', '.join(valid_operators)}"
             )
 
-        # Build entities list - include CUSTOM if deny_list provided
+        # Use default entities - DocumentAnonymizer adds CUSTOM internally after registering the recognizer
         entities = list(config.DEFAULT_ENTITIES)
-        if request.deny_list and "CUSTOM" not in entities:
-            entities.append("CUSTOM")
 
         # Initialize anonymizer
         anonymizer = DocumentAnonymizer(
